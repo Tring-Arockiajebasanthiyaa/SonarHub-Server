@@ -26,7 +26,7 @@ export class User {
 
   @Column({ unique: true })
   @Field()
-  username!: string; // Ensure this is NOT NULL
+  username!: string; 
 
   @Column({ unique: true, nullable: true })
   @Field({ nullable: true })

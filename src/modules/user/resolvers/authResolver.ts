@@ -81,86 +81,96 @@ export class AuthResolver {
     }
   }
   @Mutation(() => String)
-async resetPassword(
-  @Ctx() ctx: any, // Get user from context (if using authentication middleware)
-  @Arg("newPassword") newPassword: string
-): Promise<string> {
-  try {
-    if (!ctx.user) throw new Error("Unauthorized"); // Ensure user is logged in
-
-    if (!dataSource.isInitialized) await dataSource.initialize();
-
-    const user = await dataSource.getRepository(User).findOne({ where: { email: ctx.user.email } });
-    if (!user) throw new Error("User not found");
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    await dataSource.getRepository(User).save(user); // Save updated password
-
-    // ✅ Send email to logged-in user after password reset
-    await sendEmail(
-      user.email,
-      "Password Changed",
-      `Hello ${user.name},\n\nYour password has been successfully updated.\n\nIf this wasn't you, please contact support immediately.`
-    );
-
-    return "Password reset successfully.";
-  } catch (error) {
-    console.error("❌ Error resetting password:", error);
-    throw new Error("Something went wrong. Please try again later.");
+  async resetPassword(
+    @Arg("token") token: string,
+    @Arg("newPassword") newPassword: string
+  ): Promise<string> {
+    try {
+      if (!dataSource.isInitialized) await dataSource.initialize();
+  
+      const payload = jwt.verify(token, this.JWT_SECRET) as { u_id: string };
+      const user = await dataSource.getRepository(User).findOne({ where: { u_id: payload.u_id } });
+  
+      if (!user) throw new Error("User not found");
+  
+      user.password = await bcrypt.hash(newPassword, 10);
+      await dataSource.getRepository(User).save(user);
+  
+      // ✅ Send confirmation email after password reset
+      await sendEmail(
+        user.email,
+        "Password Changed",
+        `Hello ${user.name},\n\nYour password has been successfully updated.\n\nIf this wasn't you, please contact support immediately.`
+      );
+  
+      return "Password reset successfully.";
+    } catch (error) {
+      console.error("❌ Error resetting password:", error);
+      throw new Error("Invalid or expired token.");
+    }
   }
-}
+  
 
   // Sign In Mutation
   @Mutation(() => String)
   async signIn(@Arg("email") email: string, @Arg("password") password: string): Promise<string> {
     try {
       if (!dataSource.isInitialized) await dataSource.initialize();
-
+  
       const user = await dataSource.getRepository(User).findOne({ where: { email } });
       if (!user || !user.password) throw new Error("Invalid credentials");
-
+  
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) throw new Error("Invalid credentials");
-
-      return jwt.sign({ u_id: user.u_id }, this.JWT_SECRET, { expiresIn: "1d" });
-
+  
+      return jwt.sign({ u_id: user.u_id }, process.env.JWT_SECRET!, { expiresIn: "1d" });
+  
     } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message || "Authentication failed");
+      }
       throw new Error("Authentication failed");
     }
   }
-
+  
   // Set Password Mutation
   @Mutation(() => String)
   async setPassword(@Arg("email") email: string, @Arg("password") password: string): Promise<string> {
     try {
       if (!dataSource.isInitialized) await dataSource.initialize();
-
+  
       const user = await dataSource.getRepository(User).findOne({ where: { email } });
       if (!user) throw new Error("User not found");
-
+  
       user.password = await bcrypt.hash(password, 10);
       await dataSource.getRepository(User).save(user);
-
+  
       return "Password updated successfully.";
-    } catch (error) {
-      throw new Error("Failed to update password.");
+    } catch (error: unknown) {
+      console.error("❌ Error updating password:", error);
+    
+      if (error instanceof Error) {
+        throw new Error(`Failed to update password. Reason: ${error.message}`);
+      } else {
+        throw new Error("Failed to update password due to an unknown error.");
+      }
     }
   }
+  
   @Mutation(() => String)
-async sendPasswordChangeEmail(@Arg("email") email: string): Promise<string> {
-  try {
-    if (!dataSource.isInitialized) await dataSource.initialize();
-
-    const user = await dataSource.getRepository(User).findOne({ where: { email } });
-    if (!user) throw new Error("User not found");
-
-    // Call email service here
-    await sendEmail(user.email, "Reset your password", "Click here to reset your password");
-
-    return "Password reset email sent successfully.";
-  } catch (error) {
-    throw new Error("Failed to send password reset email.");
+  async sendPasswordChangeEmail(@Arg("email") email: string): Promise<string> {
+    try {
+      if (!dataSource.isInitialized) await dataSource.initialize();
+  
+      const user = await dataSource.getRepository(User).findOne({ where: { email } });
+      if (!user) throw new Error("User not found");
+  
+      await sendEmail(user.email, "Reset your password", "Click here to reset your password");
+  
+      return "Password reset email sent successfully.";
+    } catch (error) {
+      throw new Error("Failed to send password reset email.");
+    }
   }
-}
-
+  
 }

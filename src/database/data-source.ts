@@ -1,14 +1,14 @@
 import { DataSource, DataSourceOptions } from "typeorm";
 import dotenv from "dotenv";
 import { User } from "../modules/user/entity/user.entity";
-import { Project } from "../modules/user/entity/project.entity";
-
+import { Project } from "../modules/Project/entity/project.entity";
+import {UserActivity} from "../modules/UserActivity/entity/UserActivity.entity";
 dotenv.config();
 
 export const dbdataSource: DataSourceOptions = {
   type: "postgres",
   database: process.env.DB_NAME || "SonarHub",
-  entities: [User, Project],
+  entities: [User, Project,UserActivity],
   migrations: ["src/database/migrations/*.{js,ts}"],
   host: process.env.DB_HOST || "localhost",
   port: Number(process.env.DB_PORT),

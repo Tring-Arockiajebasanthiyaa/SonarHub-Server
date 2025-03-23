@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm"; 
 import { ObjectType, Field } from "type-graphql";
 
 @Entity({ name: "projects" })
@@ -6,7 +6,7 @@ import { ObjectType, Field } from "type-graphql";
 export class Project {
   @PrimaryGeneratedColumn("uuid")
   @Field()
-  id!: string;
+  u_id!: string;
 
   @Column()
   @Field()
@@ -16,10 +16,17 @@ export class Project {
   @Field()
   description!: string;
 
-  @Column()
+  @Column("text")
   @Field()
-  owner!: string;
+  issues!: string; 
 
+  @Column("text")
+  @Field()
+  codeSmells!: string; 
+  @Column("text")
+  @Field()
+  suggestions!: string; 
+  
   @CreateDateColumn()
   @Field(() => String)
   createdAt!: Date;
