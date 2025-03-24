@@ -1,11 +1,22 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm"; 
-import { ObjectType, Field } from "type-graphql";
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from "typeorm";
+import { ObjectType, Field, ID } from "type-graphql";
+import { User } from "../../user/entity/user.entity";
+import { SonarIssue } from "../../SonarIssues/entity/SonarIssue.entity";
 
 @Entity({ name: "projects" })
 @ObjectType()
 export class Project {
   @PrimaryGeneratedColumn("uuid")
-  @Field()
+  @Field(() => ID)
   u_id!: string;
 
   @Column()
@@ -16,18 +27,28 @@ export class Project {
   @Field()
   description!: string;
 
-  @Column("text")
+  @Column()
   @Field()
-  issues!: string; 
+  overview!: string;
 
-  @Column("text")
+  @Column()
   @Field()
-  codeSmells!: string; 
-  @Column("text")
-  @Field()
-  suggestions!: string; 
-  
+  result!: string;
+
+  @ManyToOne(() => User, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "user_id", referencedColumnName: "u_id" })
+  @Field(() => User)
+  user!: User;
+
+  @OneToMany(() => SonarIssue, (sonarIssue) => sonarIssue.project, { cascade: true })
+  @Field(() => [SonarIssue], { nullable: true })
+  sonarIssues?: SonarIssue[];
+
   @CreateDateColumn()
   @Field(() => String)
   createdAt!: Date;
+
+  @UpdateDateColumn()
+  @Field(() => String)
+  updatedAt!: Date;
 }

@@ -1,63 +1,113 @@
-import { Resolver, Query, Arg, Mutation } from "type-graphql";
-import fetch from "node-fetch";
-import dotenv from "dotenv";
+import { Resolver, Query, Mutation, Arg } from "type-graphql";
+import { SonarIssue } from "../entity/SonarIssue.entity";
 import { Project } from "../../Project/entity/project.entity";
-import { Repository } from "typeorm";
 import dataSource from "../../../database/data-source";
-import { User } from "../../user/entity/user.entity";
+import { User } from "../../../modules/user/entity/user.entity";
+import { SonarIssueInput } from "../entity/SonarIssueInput";
+import dotenv from "dotenv";
+import fetch from "node-fetch";
+
 dotenv.config();
+
+const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
+const SONARQUBE_API_TOKEN = process.env.SONARQUBE_API_TOKEN;
 
 @Resolver()
 export class SonarQubeResolver {
-  private API_URL = process.env.SONARQUBE_API_URL || "";
-  private API_TOKEN = process.env.SONARQUBE_API_TOKEN || "";
+  private sonarIssueRepo = dataSource.getRepository(SonarIssue);
+  private projectRepo = dataSource.getRepository(Project);
+  private userRepo = dataSource.getRepository(User);
 
-  @Query(() => Project, { nullable: true })
-  async getSonarQubeAnalysis(@Arg("projectKey") projectKey: string): Promise<Project | null> {
-    const projectRepository: Repository<Project> = dataSource.getRepository(Project);
-    let project = await projectRepository.findOne({ where: { title: projectKey } });
-    if (!project) {
-      project = await this.fetchAndStoreSonarQubeAnalysis(projectKey);
+  @Query(() => [SonarIssue])
+  async getSonarIssues(
+    @Arg("githubUsername") githubUsername: string,
+    @Arg("repoName") repoName: string
+  ): Promise<SonarIssue[]> {
+    try {
+      console.log(`Fetching SonarQube issues for ${githubUsername}/${repoName}`);
+
+      let project = await this.projectRepo.findOne({
+        where: { title: repoName },
+        relations: ["user", "sonarIssues"],
+      });
+
+      if (!project) {
+        const user = await this.userRepo.findOne({ where: { username: githubUsername } });
+        if (!user) throw new Error(`User not found for username: ${githubUsername}`);
+
+        project = this.projectRepo.create({
+          title: repoName,
+          description: `Auto-created project for ${repoName}`,
+          overview: "Automatically generated overview",
+          result: "Pending",
+          user,
+        });
+
+        await this.projectRepo.save(project);
+      }
+
+      const response = await fetch(
+        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${repoName}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error(`SonarQube API request failed: ${response.statusText}`);
+        throw new Error(`Failed to fetch SonarQube issues.`);
+      }
+
+      const sonarData = await response.json();
+      if (!sonarData.issues) throw new Error("Invalid response from SonarQube API.");
+
+      const sonarIssues = sonarData.issues.map((issue: any) =>
+        this.sonarIssueRepo.create({
+          issueType: issue.type,
+          severity: issue.severity,
+          message: issue.message,
+          rule: issue.rule,
+          component: issue.component,
+          project,
+        })
+      );
+
+      await this.sonarIssueRepo.save(sonarIssues);
+
+      return this.sonarIssueRepo.find({ where: { project: { u_id: project.u_id } } });
+    } catch (error) {
+      console.error("Error in getSonarIssues:", error);
+      throw new Error("Failed to fetch SonarQube issues.");
     }
-    return project;
   }
 
-  @Mutation(() => Project)
-  async fetchAndStoreSonarQubeAnalysis(@Arg("projectKey") projectKey: string): Promise<Project> {
-    if (!this.API_URL || !this.API_TOKEN) {
-      throw new Error("Missing SonarQube API configuration");
-    }
-
-    // Fetch issues from SonarQube
-    const response = await fetch(`${this.API_URL}/api/issues/search?componentKeys=${projectKey}`, {
-        headers: {
-          Authorization: `Basic ${Buffer.from(this.API_TOKEN + ":").toString("base64")}`,
-        },
+  @Mutation(() => Boolean)
+  async addSonarIssues(
+    @Arg("repoName") repoName: string,
+    @Arg("githubUsername") githubUsername: string,
+    @Arg("issues", () => [SonarIssueInput]) issues: SonarIssueInput[]
+  ): Promise<boolean> {
+    try {
+      const project = await this.projectRepo.findOne({
+        where: { title: repoName },
+        relations: ["user"],
       });
-      console.log("SonarQube API Status:", response.status); // Log the status code
-      console.log("SonarQube API Headers:", response.headers); 
-    const data = await response.json();
-    console.log("SonarQube API Response:", JSON.stringify(data, null, 2));
-    
 
-    if (!data.issues) {
-      throw new Error("No issues found for the given project.");
+      if (!project) throw new Error("Project not found!");
+
+      const sonarIssues = issues.map((issue) =>
+        this.sonarIssueRepo.create({ ...issue, project })
+      );
+
+      await this.sonarIssueRepo.save(sonarIssues);
+      return true;
+    } catch (error) {
+      console.error("Error in addSonarIssues:", error);
+      throw new Error("Failed to add SonarQube issues.");
     }
-
-    // Filter issues by type
-    const issues = JSON.stringify(data.issues.filter((issue: any) => issue.type === "BUG") || []);
-    const codeSmells = JSON.stringify(data.issues.filter((issue: any) => issue.type === "CODE_SMELL") || []);
-    const suggestions = JSON.stringify(data.issues.filter((issue: any) => issue.type === "VULNERABILITY") || []);
-
-    const projectRepository = dataSource.getRepository(Project);
-    let project = new Project();
-    project.title = projectKey;
-    project.description = `Analysis data for ${projectKey}`;
-    project.issues = issues;
-    project.codeSmells = codeSmells;
-    project.suggestions = suggestions;
-
-    await projectRepository.save(project);
-    return project;
   }
 }

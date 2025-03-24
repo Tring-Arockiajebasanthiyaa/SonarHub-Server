@@ -13,7 +13,7 @@ export class AuthResolver {
 
   // ✅ Check Authentication Query
   @Query(() => AuthResponse, { nullable: true })
-  async checkAuth(
+  async validateAuth(
     @Ctx() ctx: MyContext, 
     @Arg("onlyStatus", { nullable: true }) onlyStatus?: boolean
   ): Promise<AuthResponse | null> {
