@@ -11,9 +11,9 @@ import passport from "passport";
 export class AuthResolver {
   private JWT_SECRET = process.env.JWT_SECRET!;
 
-  // ✅ Check Authentication Query
+  // ✅ Check Authentication Query for signup
   @Query(() => AuthResponse, { nullable: true })
-  async validateAuth(
+  async checkAuth(
     @Ctx() ctx: MyContext, 
     @Arg("onlyStatus", { nullable: true }) onlyStatus?: boolean
   ): Promise<AuthResponse | null> {

@@ -56,7 +56,7 @@ export class SonarQubeResolver {
           },
         }
       );
-
+      console.log(response);
       if (!response.ok) {
         console.error(`SonarQube API request failed: ${response.statusText}`);
         throw new Error(`Failed to fetch SonarQube issues.`);
