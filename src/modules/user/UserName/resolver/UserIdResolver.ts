@@ -1,6 +1,6 @@
 import { Resolver, Query, Arg, ObjectType, Field } from "type-graphql";
-import { User } from "../../user/entity/user.entity";
-import dataSource from "../../../database/data-source";
+import { User } from "../../entity/user.entity";
+import dataSource from "../../../../database/data-source";
 @ObjectType()
 class UserResponse {
   @Field()

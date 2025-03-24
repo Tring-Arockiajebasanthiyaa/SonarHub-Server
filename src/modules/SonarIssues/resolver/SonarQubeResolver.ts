@@ -56,13 +56,14 @@ export class SonarQubeResolver {
           },
         }
       );
-      console.log(response);
+      console.log("response",response);
       if (!response.ok) {
         console.error(`SonarQube API request failed: ${response.statusText}`);
         throw new Error(`Failed to fetch SonarQube issues.`);
       }
 
       const sonarData = await response.json();
+      console.log("Sonardata",sonarData);
       if (!sonarData.issues) throw new Error("Invalid response from SonarQube API.");
 
       const sonarIssues = sonarData.issues.map((issue: any) =>

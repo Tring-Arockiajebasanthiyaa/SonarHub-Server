@@ -10,7 +10,7 @@ export class UserNameResolver {
     
     const user = await dataSource.getRepository(User).findOne({ where: { email } });
   
-    console.log("Found user:", user); // Check if a user is returned
+    console.log("Found user:", user); 
     return user;
   }
   
