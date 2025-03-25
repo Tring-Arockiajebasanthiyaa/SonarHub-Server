@@ -9,7 +9,7 @@ import { schema } from "./schema";
 import session from "express-session";
 import { MyContext } from "./types/MyContext";
 import authRoutes from "./routes/authRoutes";
-import dataSource from "./database/data-source"; // Import the data source
+import dataSource from "./database/data-source"; 
 
 dotenv.config();
 
@@ -63,7 +63,7 @@ async function startServer() {
     })
   );
 
-  app.listen(4000, () => console.log("🚀 Server running on http://localhost:4000/graphql"));
+  app.listen(4000, () => console.log(" Server running on http://localhost:4000/graphql"));
 }
 
-startServer().catch((err) => console.error("❌ Server startup error:", err));
+startServer().catch((err) => console.error("Server startup error:", err));

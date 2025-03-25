@@ -126,7 +126,7 @@ export class UserActivityResolver {
           });
         }
 
-        // **Fetch SonarQube issues**
+       
         const sonarIssuesResponse = await fetch(
           `${this.SONARQUBE_URL}/api/issues/search?componentKeys=${repo.name}&resolved=false`,
           {
