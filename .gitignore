@@ -1,2 +1,25 @@
-node_modules
+# Node modules (dependencies)
+node_modules/
+
+# Environment variables
 .env
+
+# SonarQube configuration file
+sonar-project-backend.properties
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+build/
+
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
