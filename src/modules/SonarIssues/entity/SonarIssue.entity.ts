@@ -21,11 +21,11 @@ export class SonarIssue {
 
     @Column()
     @Field()
-    issueType!: string; // BUG, CODE_SMELL, VULNERABILITY
+    type!: string; 
 
     @Column()
     @Field()
-    severity!: string; // MAJOR, CRITICAL, BLOCKER, etc.
+    severity!: string;
 
     @Column()
     @Field()
@@ -38,6 +38,42 @@ export class SonarIssue {
     @Column()
     @Field()
     component!: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    line?: number;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    effort?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    debt?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    author?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    status?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    resolution?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    hash?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    textRange?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    flows?: string;
 
     @CreateDateColumn()
     @Field(() => String)
