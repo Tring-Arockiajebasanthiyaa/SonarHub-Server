@@ -2,9 +2,9 @@ import { DataSource, DataSourceOptions } from "typeorm";
 import dotenv from "dotenv";
 import { User } from "../modules/user/entity/user.entity";
 import { Project } from "../modules/Project/entity/project.entity";
-import {UserActivity} from "../modules/UserActivity/entity/UserActivity.entity";
-import {SonarIssue} from"../modules/SonarIssues/entity/SonarIssue.entity";
-import { Repo } from "../modules/GitHubRepository/entity/Repo.entity";
+import {UserActivity} from "../modules/UserActivity/entity/userActivity.entity";
+import {SonarIssue} from"../modules/SonarIssues/entity/sonarIssue.entity";
+import { Repo } from "../modules/GitHubRepository/entity/repo.entity";
 dotenv.config();
 
 export const dbdataSource: DataSourceOptions = {

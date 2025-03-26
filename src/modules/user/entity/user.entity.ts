@@ -31,4 +31,8 @@ export class User {
   @Column({ unique: true, nullable: true })
   @Field({ nullable: true })
   githubId?: string;
+
+  @Column({ nullable: true, select: true }) 
+  @Field({ nullable: true })
+  githubAccessToken!: string;
 }

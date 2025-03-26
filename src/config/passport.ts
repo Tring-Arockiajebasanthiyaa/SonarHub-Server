@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as GitHubStrategy, Profile } from "passport-github2";
-import { User } from "../modules/user/entity/user.entity"; 
+import { User } from "../modules/user/entity/user.entity";
 import dataSource from "../database/data-source";
 import jwt from "jsonwebtoken";
 
@@ -10,7 +10,7 @@ passport.use(
       clientID: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       callbackURL: process.env.GITHUB_CALLBACK_URL!,
-      scope: ["user:email"],
+      scope: ["user:email", "repo"], 
       passReqToCallback: true,
     },
     async (
@@ -21,7 +21,7 @@ passport.use(
       done: (error: any, user?: any) => void
     ) => {
       try {
-        console.log("GitHub Profile:", profile); 
+        console.log("GitHub Profile:", profile);
         console.log("Access Token:", accessToken); 
 
         let user = await dataSource.getRepository(User).findOne({
@@ -29,16 +29,19 @@ passport.use(
         });
 
         if (!user) {
-          
           const username = profile.username || `github_${profile.id}`;
 
           user = dataSource.getRepository(User).create({
             name: profile.displayName || profile.username,
             email: profile.emails?.[0]?.value || `${profile.username}@github.com`,
-            username, 
+            username,
             githubId: profile.id,
+            githubAccessToken: accessToken,
           });
 
+          await dataSource.getRepository(User).save(user);
+        } else {
+          user.githubAccessToken = accessToken;
           await dataSource.getRepository(User).save(user);
         }
 
@@ -48,7 +51,7 @@ passport.use(
 
         done(null, { user, token });
       } catch (error) {
-        console.error("GitHub Strategy Error:", error); 
+        console.error("GitHub Strategy Error:", error);
         return done(error, null);
       }
     }
@@ -56,15 +59,14 @@ passport.use(
 );
 
 passport.serializeUser((data: any, done) => {
-  done(null, data?.user?.u_id|| null);
+  done(null, data?.user?.u_id || null);
 });
 
-// Deserialize user session
 passport.deserializeUser(async (u_id: string, done) => {
   try {
     if (!u_id) return done(null, null);
 
-    const user = await dataSource.getRepository(User).findOne({ where: { u_id } }); // Use u_id instead of userId
+    const user = await dataSource.getRepository(User).findOne({ where: { u_id } });
 
     if (!user) {
       console.error("User Not Found in DB");
@@ -77,6 +79,5 @@ passport.deserializeUser(async (u_id: string, done) => {
     done(error, null);
   }
 });
-
 
 export default passport;

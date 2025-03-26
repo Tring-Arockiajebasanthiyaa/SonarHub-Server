@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer";
 
 export const sendEmail = async (to: string, subject: string, text: string) => {
-  const adminEmail = process.env.EMAIL_USER;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  
+
   if (!adminEmail) {
     console.error("Missing email credentials in .env");
     return;

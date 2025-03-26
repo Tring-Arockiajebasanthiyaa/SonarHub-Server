@@ -1,8 +1,8 @@
 import { Resolver, Query, Arg } from "type-graphql";
-import { SonarIssue } from "../entity/SonarIssue.entity";
+import { SonarIssue } from "../entity/sonarIssue.entity";
 import { Project } from "../../Project/entity/project.entity";
 import dataSource from "../../../database/data-source";
-import { User } from "../../../modules/user/entity/user.entity";
+import { User } from "../../user/entity/user.entity";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
 
@@ -25,7 +25,6 @@ export class SonarQubeResolver {
     try {
       console.log(`Fetching SonarQube issues for ${githubUsername}/${repoName}`);
 
-      // Find or create user
       const user = await this.userRepo.findOne({ 
         where: { username: githubUsername } 
       });
@@ -33,7 +32,6 @@ export class SonarQubeResolver {
         throw new Error(`User ${githubUsername} not found`);
       }
 
-      // Find or create project
       let project = await this.projectRepo.findOne({
         where: { title: repoName, user: { u_id: user.u_id } },
         relations: ["user"],
@@ -50,7 +48,7 @@ export class SonarQubeResolver {
         await this.projectRepo.save(project);
       }
 
-      // Fetch all issues from SonarQube
+     
       const response = await fetch(
         `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${repoName}&ps=500`,
         {
@@ -73,10 +71,10 @@ export class SonarQubeResolver {
         throw new Error("No issues array in SonarQube response");
       }
 
-      // Clear existing issues
+     
       await this.sonarIssueRepo.delete({ project: { u_id: project.u_id } });
 
-      // Create and save new issues - using the correct approach
+     
       const issuesToSave = sonarData.issues.map((issue: any) => {
         const newIssue = new SonarIssue();
         newIssue.type = issue.type;
@@ -96,7 +94,7 @@ export class SonarQubeResolver {
         newIssue.project = project;
         return newIssue;
       });
-
+      console.log(issuesToSave);
       await this.sonarIssueRepo.save(issuesToSave);
 
       return this.sonarIssueRepo.find({

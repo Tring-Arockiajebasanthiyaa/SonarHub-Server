@@ -1,7 +1,7 @@
 import { Resolver, Query, Arg } from "type-graphql";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
-import { Repo } from "../../GitHubRepository/entity/Repo.entity";
+import { Repo } from "../entity/repo.entity";
 import { User } from "../../user/entity/user.entity";
 import dataSource from "../../../database/data-source";
 

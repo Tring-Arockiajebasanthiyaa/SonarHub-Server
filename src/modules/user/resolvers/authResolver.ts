@@ -11,14 +11,14 @@ import passport from "passport";
 export class AuthResolver {
   private JWT_SECRET = process.env.JWT_SECRET!;
 
-  // ✅ Check Authentication Query for signup
+  
   @Query(() => AuthResponse, { nullable: true })
   async checkAuth(
     @Ctx() ctx: MyContext, 
     @Arg("onlyStatus", { nullable: true }) onlyStatus?: boolean
   ): Promise<AuthResponse | null> {
     if (!dataSource.isInitialized) {
-      await dataSource.initialize();  // Ensure database is initialized
+      await dataSource.initialize();  
     }
   
     if (!ctx.req.user) {
@@ -37,7 +37,7 @@ export class AuthResolver {
   }
   
   
-  // ✅ GitHub Authentication Mutation
+ 
   @Mutation(() => AuthResponse, { nullable: true })
   async githubAuth(@Ctx() ctx: MyContext): Promise<AuthResponse | null> {
     return new Promise((resolve, reject) => {
@@ -58,7 +58,7 @@ export class AuthResolver {
     });
   }
 
-  // Forgot Password Mutation
+ 
   @Mutation(() => String)
   async forgotPassword(@Arg("email") email: string): Promise<string> {
     try {
@@ -96,7 +96,7 @@ export class AuthResolver {
       user.password = await bcrypt.hash(newPassword, 10);
       await dataSource.getRepository(User).save(user);
   
-      // ✅ Send confirmation email after password reset
+      
       await sendEmail(
         user.email,
         "Password Changed",
@@ -105,7 +105,7 @@ export class AuthResolver {
   
       return "Password reset successfully.";
     } catch (error) {
-      console.error("❌ Error resetting password:", error);
+      console.error("Error resetting password:", error);
       throw new Error("Invalid or expired token.");
     }
   }
@@ -147,7 +147,7 @@ export class AuthResolver {
   
       return "Password updated successfully.";
     } catch (error: unknown) {
-      console.error("❌ Error updating password:", error);
+      console.error("Error updating password:", error);
     
       if (error instanceof Error) {
         throw new Error(`Failed to update password. Reason: ${error.message}`);

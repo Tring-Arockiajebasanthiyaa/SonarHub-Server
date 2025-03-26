@@ -10,7 +10,7 @@ import {
 } from "typeorm";
 import { ObjectType, Field, ID } from "type-graphql";
 import { User } from "../../user/entity/user.entity";
-import { SonarIssue } from "../../SonarIssues/entity/SonarIssue.entity";
+import { SonarIssue } from "../../SonarIssues/entity/sonarIssue.entity";
 
 @Entity({ name: "projects" })
 @ObjectType()
