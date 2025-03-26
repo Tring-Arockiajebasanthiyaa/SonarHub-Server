@@ -3,7 +3,6 @@ import { User } from "../entity/user.entity";
 import dataSource from "../../../database/data-source";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { sendEmail } from "../../../utils/emailService";
 import { MyContext } from "../../../types/MyContext";
 import { AuthResponse} from "../../../graphql/AuthResponse";
 import passport from "passport";
@@ -69,13 +68,8 @@ export class AuthResolver {
 
       const token = jwt.sign({ u_id: user.u_id }, this.JWT_SECRET, { expiresIn: "15m" });
 
-      await sendEmail(
-        user.email,
-        "Password Reset",
-        `Click here to reset your password: http://localhost:5173/reset-password?token=${token}`
-      );
 
-      return "Reset link sent to your email.";
+      return "Reset Your Password";
     } catch (error) {
       throw new Error("Something went wrong. Please try again later.");
     }
@@ -96,12 +90,6 @@ export class AuthResolver {
       user.password = await bcrypt.hash(newPassword, 10);
       await dataSource.getRepository(User).save(user);
   
-      
-      await sendEmail(
-        user.email,
-        "Password Changed",
-        `Hello ${user.name},\n\nYour password has been successfully updated.\n\nIf this wasn't you, please contact support immediately.`
-      );
   
       return "Password reset successfully.";
     } catch (error) {
@@ -165,9 +153,8 @@ export class AuthResolver {
       const user = await dataSource.getRepository(User).findOne({ where: { email } });
       if (!user) throw new Error("User not found");
   
-      await sendEmail(user.email, "Reset your password", "Click here to reset your password");
   
-      return "Password reset email sent successfully.";
+      return "Please set your password";
     } catch (error) {
       throw new Error("Failed to send password reset email.");
     }

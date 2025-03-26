@@ -2,5 +2,5 @@ projectKey=sonarhub-backend
 serverUrl=http://localhost:9000
 serverVersion=25.3.0.104237
 dashboardUrl=http://localhost:9000/dashboard?id=sonarhub-backend
-ceTaskId=e8d97a5c-4783-49e2-8a53-4e53215dc743
-ceTaskUrl=http://localhost:9000/api/ce/task?id=e8d97a5c-4783-49e2-8a53-4e53215dc743
+ceTaskId=7f99602f-a4e8-4d72-ae22-f94df1ce48f5
+ceTaskUrl=http://localhost:9000/api/ce/task?id=7f99602f-a4e8-4d72-ae22-f94df1ce48f5

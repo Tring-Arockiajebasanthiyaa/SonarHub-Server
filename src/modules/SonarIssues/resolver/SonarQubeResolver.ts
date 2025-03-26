@@ -25,9 +25,7 @@ export class SonarQubeResolver {
     try {
       console.log(`Fetching SonarQube issues for ${githubUsername}/${repoName}`);
 
-      const user = await this.userRepo.findOne({ 
-        where: { username: githubUsername } 
-      });
+      const user = await this.userRepo.findOne({ where: { username: githubUsername } });
       if (!user) {
         throw new Error(`User ${githubUsername} not found`);
       }
@@ -48,9 +46,8 @@ export class SonarQubeResolver {
         await this.projectRepo.save(project);
       }
 
-     
-      const response = await fetch(
-        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${repoName}&ps=500`,
+      const projectCheckResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/components/show?component=${repoName}`,
         {
           method: "GET",
           headers: {
@@ -60,21 +57,41 @@ export class SonarQubeResolver {
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`SonarQube API request failed: ${response.statusText}`);
+      const projectData = await projectCheckResponse.json();
+      console.log("SonarQube Project Data:", projectData);
+
+      if (!projectData.component) {
+        throw new Error(`SonarQube project ${repoName} not found`);
       }
 
-      const sonarData = await response.json();
+     
+      const issuesResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${projectData.component.key}&statuses=OPEN,CONFIRMED,REOPENED,RESOLVED&ps=500`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      
+
+      if (!issuesResponse.ok) {
+        const errorText = await issuesResponse.text();
+        throw new Error(`SonarQube API request failed: ${errorText}`);
+      }
+
+      const sonarData = await issuesResponse.json();
       console.log("SonarQube response data:", sonarData);
 
       if (!sonarData.issues) {
         throw new Error("No issues array in SonarQube response");
       }
 
-     
+      
       await this.sonarIssueRepo.delete({ project: { u_id: project.u_id } });
 
-     
       const issuesToSave = sonarData.issues.map((issue: any) => {
         const newIssue = new SonarIssue();
         newIssue.type = issue.type;
@@ -89,18 +106,18 @@ export class SonarQubeResolver {
         newIssue.status = issue.status;
         newIssue.resolution = issue.resolution;
         newIssue.hash = issue.hash;
-        newIssue.textRange = issue.textRange ? JSON.stringify(issue.textRange):undefined;
+        newIssue.textRange = issue.textRange ? JSON.stringify(issue.textRange) : undefined;
         newIssue.flows = issue.flows ? JSON.stringify(issue.flows) : undefined;
         newIssue.project = project;
         return newIssue;
       });
-      console.log(issuesToSave);
+
       await this.sonarIssueRepo.save(issuesToSave);
 
       return this.sonarIssueRepo.find({
         where: { project: { u_id: project.u_id } },
-        order: { severity: 'DESC', type: 'ASC' },
-        relations: ["project"]
+        order: { severity: "DESC", type: "ASC" },
+        relations: ["project"],
       });
     } catch (error) {
       console.error("Error in getSonarIssues:", error);
