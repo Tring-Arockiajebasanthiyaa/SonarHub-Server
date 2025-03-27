@@ -6,11 +6,21 @@ import bcrypt from "bcrypt";
 import { MyContext } from "../../../types/MyContext";
 import { AuthResponse} from "../../../graphql/AuthResponse";
 import passport from "passport";
+import "express-session";
+import { SessionData } from "express-session";
+import "../../../types/session";
 @Resolver()
 export class AuthResolver {
   private JWT_SECRET = process.env.JWT_SECRET!;
-
+  @Query(() => String, { nullable: true })
+  async getSignupEmail(@Ctx() ctx: MyContext): Promise<string | null> {
+    console.log("Session in getSignupEmail:", ctx.req.session);
+    console.log("Stored Email in Session:", ctx.req.session.userEmail);
+    return ctx.req.session.userEmail || null;
+  }
   
+  
+
   @Query(() => AuthResponse, { nullable: true })
   async checkAuth(
     @Ctx() ctx: MyContext, 
@@ -27,12 +37,25 @@ export class AuthResolver {
     const userContext = ctx.req.user as { u_id: string; email: string; username: string };
     const userRepo = dataSource.getRepository(User);
     const user = await userRepo.findOne({ where: { email: userContext.email } });
-  
     if (!user) {
       return { isAuthenticated: false, user: null, token: null };
     }
+    console.log("userContext",userContext);
+    ctx.req.session.userEmail = userContext.email;
+
+  // 🔹 Explicitly save the session
+  await new Promise((resolve, reject) => {
+    ctx.req.session.save((err) => {
+      if (err) reject(err);
+      else resolve(null);
+    });
+  });
+
+    console.log("Session after saving:", ctx.req.session.userEmail);
+
   
-    return { isAuthenticated: true, user };
+    console.log("Session stored:", ctx.req.session);
+    return { isAuthenticated: true, user ,  needsPassword: !user.password  };
   }
   
   
@@ -77,7 +100,8 @@ export class AuthResolver {
   @Mutation(() => String)
   async resetPassword(
     @Arg("token") token: string,
-    @Arg("newPassword") newPassword: string
+    @Arg("newPassword") newPassword: string,
+    @Ctx() ctx: MyContext
   ): Promise<string> {
     try {
       if (!dataSource.isInitialized) await dataSource.initialize();
@@ -89,8 +113,8 @@ export class AuthResolver {
   
       user.password = await bcrypt.hash(newPassword, 10);
       await dataSource.getRepository(User).save(user);
-  
-  
+      
+      
       return "Password reset successfully.";
     } catch (error) {
       console.error("Error resetting password:", error);
@@ -99,7 +123,7 @@ export class AuthResolver {
   }
   
 
-  // Sign In Mutation
+
   @Mutation(() => String)
   async signIn(@Arg("email") email: string, @Arg("password") password: string): Promise<string> {
     try {
@@ -123,7 +147,7 @@ export class AuthResolver {
   
   // Set Password Mutation
   @Mutation(() => String)
-  async setPassword(@Arg("email") email: string, @Arg("password") password: string): Promise<string> {
+  async setPassword(@Arg("email") email: string, @Arg("password") password: string,@Ctx() ctx: MyContext): Promise<string> {
     try {
       if (!dataSource.isInitialized) await dataSource.initialize();
   
@@ -132,7 +156,7 @@ export class AuthResolver {
   
       user.password = await bcrypt.hash(password, 10);
       await dataSource.getRepository(User).save(user);
-  
+      ctx.req.session.userEmail = undefined;
       return "Password updated successfully.";
     } catch (error: unknown) {
       console.error("Error updating password:", error);
@@ -152,7 +176,6 @@ export class AuthResolver {
   
       const user = await dataSource.getRepository(User).findOne({ where: { email } });
       if (!user) throw new Error("User not found");
-  
   
       return "Please set your password";
     } catch (error) {

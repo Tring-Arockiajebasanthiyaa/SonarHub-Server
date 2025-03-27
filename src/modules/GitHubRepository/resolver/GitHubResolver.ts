@@ -35,7 +35,7 @@ export class GitHubResolver {
 
     const repoDetails = await Promise.all(
       repos.map(async (repo: any) => {
-        // Fetch commit count
+    
         const commitsResponse = await fetch(repo.commits_url.replace("{/sha}", ""), {
           headers: { Authorization: `token ${GITHUB_TOKEN}` },
         });

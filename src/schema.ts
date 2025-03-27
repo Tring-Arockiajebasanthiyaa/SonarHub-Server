@@ -1,7 +1,7 @@
 import { buildSchema } from "type-graphql";
 import { AuthResolver } from "./modules/user/resolvers/authResolver"; 
 
-import {UserResolver} from "./modules/user/userId/resolver/UserResolver";
+import {UserResolver} from "./modules/user/userId/resolver/userResolver";
 import {SonarQubeResolver} from "./modules/SonarIssues/resolver/SonarQubeResolver";
 import { GitHubResolver } from "./modules/GitHubRepository/resolver/GitHubResolver";
 import{UserActivityResolver} from "./modules/UserActivity/resolver/userActivityResolver";

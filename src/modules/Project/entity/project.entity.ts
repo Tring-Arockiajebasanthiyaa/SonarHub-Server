@@ -22,6 +22,10 @@ export class Project {
   @Column()
   @Field()
   title!: string;
+  
+  @Column()
+ @Field()
+ repoName!: string;
 
   @Column()
   @Field()
@@ -34,6 +38,10 @@ export class Project {
   @Column()
   @Field()
   result!: string;
+
+  @Column()
+  @Field()
+  username!: string; 
 
   @ManyToOne(() => User, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id", referencedColumnName: "u_id" })

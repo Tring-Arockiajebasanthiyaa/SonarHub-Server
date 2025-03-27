@@ -22,7 +22,7 @@ async function startServer() {
 
   app.use(
     cors({
-      origin: "http://localhost:5173",
+      origin: process.env.FRONTEND_URL,
       credentials: true,
       methods: "GET,POST,OPTIONS",
       allowedHeaders: "Content-Type, Authorization",
@@ -35,6 +35,7 @@ async function startServer() {
       secret: process.env.SESSION_SECRET!,
       resave: false,
       saveUninitialized: true,
+      cookie: { secure: false, httpOnly: true,sameSite: "lax" }
     })
   );
   app.use(passport.initialize());
