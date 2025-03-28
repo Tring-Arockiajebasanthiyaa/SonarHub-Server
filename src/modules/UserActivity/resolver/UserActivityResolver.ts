@@ -5,7 +5,7 @@ import dataSource from "../../../database/data-source";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { MyContext } from "../../../types/MyContext";
-
+import axios from "axios";
 dotenv.config();
 
 @Resolver()
@@ -83,7 +83,13 @@ async getUserActivity(
       if (!latestUpdatedRepo || new Date(repo.updated_at) > new Date(latestUpdatedRepo.updated_at)) {
         latestUpdatedRepo = repo;
       }
-
+      const { data: repos } = await axios.get("https://api.github.com/user/repos", {
+               headers: { Authorization: `Bearer ${userGithubToken}` },
+               params: { visibility: "private", per_page: 100 },
+             });
+     
+      console.log("Private Repositories:", repos.map((repo: any) => repo.name));
+     
       if (repo.private) {
         privateRepoCount++;
       } else {

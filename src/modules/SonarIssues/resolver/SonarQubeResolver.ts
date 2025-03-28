@@ -16,108 +16,135 @@ export class SonarQubeResolver {
   private sonarIssueRepo = dataSource.getRepository(SonarIssue);
   private projectRepo = dataSource.getRepository(Project);
   private userRepo = dataSource.getRepository(User);
-
   @Query(() => [SonarIssue])
-  async getSonarIssues(
+  async analyzeRepo(
     @Arg("githubUsername") githubUsername: string,
-    @Arg("repoName") repoName: string
+    @Arg("repoName") repoName: string,
+    @Arg("branchName", { nullable: true }) branchName?: string
   ): Promise<SonarIssue[]> {
+    console.log(`analyzeRepo called with username: ${githubUsername}, repo: ${repoName}, branch: ${branchName}`);
     try {
-      console.log(`Fetching SonarQube issues for ${githubUsername}/${repoName}`);
-
+      
       const user = await this.userRepo.findOne({ where: { username: githubUsername } });
-      if (!user) {
-        throw new Error(`User ${githubUsername} not found`);
-      }
+      if (!user) throw new Error(`User ${githubUsername} not found`);
+      const projectKey = repoName.replace(/[^a-zA-Z0-9_-]/g, "_");
+      console.log(`Generated project key: ${projectKey}`);
+      const existingProjectResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/projects/search?projects=${projectKey}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}` },
+        }
+      );
+      const existingProjectData = await existingProjectResponse.json();
+      const projectExists = existingProjectData.components?.length > 0;
 
-      let project = await this.projectRepo.findOne({
-        where: { title: repoName, user: { u_id: user.u_id } },
-        relations: ["user"],
-      });
+      if (!projectExists) {
+        console.log(`Creating new SonarQube project: ${projectKey}`);
 
-      if (!project) {
-        console.log(`Creating SonarQube project for ${repoName}`);
-        const createProjectResponse = await fetch(
-          `${SONARQUBE_API_URL}/api/projects/create`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              name: repoName,
-              project: repoName.replace(/[^a-zA-Z0-9_-]/g, "_"),
-            }),
-          }
-        );
+        const createProjectResponse = await fetch(`${SONARQUBE_API_URL}/api/projects/create`, {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            name: repoName,
+            project: projectKey,
+          }).toString(),
+        });
 
-        const createProjectData = await createProjectResponse.json();
         if (!createProjectResponse.ok) {
-          throw new Error(`Failed to create SonarQube project: ${JSON.stringify(createProjectData)}`);
+          const errorText = await createProjectResponse.text();
+          throw new Error(`Failed to create SonarQube project: ${errorText}`);
         }
 
+        console.log(`SonarQube project ${projectKey} created successfully`);
+      }
+      let project = await this.projectRepo.findOne({ where: { repoName: projectKey } });
+      if (!project) {
         project = this.projectRepo.create({
           title: repoName,
-          repoName: repoName,
-          description: `Auto-created project for ${repoName}`,
-          overview: "Automatically generated overview",
+          repoName: projectKey,
+          description: `Automatically created SonarQube project for ${repoName}`,
+          overview: "Auto-generated",
           result: "Pending",
           user,
           username: user.username,
         });
         await this.projectRepo.save(project);
       }
-
-      console.log(`Triggering SonarQube analysis for ${repoName}`);
+      console.log(`Starting SonarQube analysis for ${projectKey} on branch ${branchName || "main"}`);
       const analysisResponse = await fetch(
         `${SONARQUBE_API_URL}/api/ce/submit`,
         {
           method: "POST",
           headers: {
             Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: JSON.stringify({
-            projectKey: repoName.replace(/[^a-zA-Z0-9_-]/g, "_"),
-            name: `${repoName}-analysis`,
-          }),
+          body: new URLSearchParams({
+            projectKey,
+            branch: branchName || "main",
+            report:"true"
+          }).toString(),
         }
       );
 
       const analysisData = await analysisResponse.json();
-      if (!analysisResponse.ok) {
-        throw new Error(`Failed to trigger analysis: ${JSON.stringify(analysisData)}`);
+      if (!analysisResponse.ok || !analysisData.taskId) {
+        throw new Error(`Failed to start SonarQube analysis: ${JSON.stringify(analysisData)}`);
       }
 
+      console.log(`Analysis started with Task ID: ${analysisData.taskId}`);
+      let status = "PENDING";
+      let attempts = 0;
+      while (status === "PENDING" || status === "IN_PROGRESS") {
+        if (attempts >= 12) {
+          throw new Error("Analysis timeout exceeded (60 seconds)");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        attempts++;
+
+        const taskResponse = await fetch(
+          `${SONARQUBE_API_URL}/api/ce/task?id=${analysisData.taskId}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}` },
+          }
+        );
+
+        const taskData = await taskResponse.json();
+        status = taskData.task?.status;
+        console.log(`Status: ${status} (Attempt ${attempts})`);
+      }
+
+      if (status !== "SUCCESS") {
+        project.result = `Analysis failed: ${status}`;
+        await this.projectRepo.save(project);
+        throw new Error(`SonarQube analysis failed with status: ${status}`);
+      }
+
+     
+      console.log(`Fetching issues for ${projectKey}...`);
       const issuesResponse = await fetch(
-        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${repoName.replace(
-          /[^a-zA-Z0-9_-]/g,
-          "_"
-        )}&statuses=OPEN,CONFIRMED,REOPENED,RESOLVED&ps=500`,
+        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${projectKey}&statuses=OPEN,CONFIRMED,REOPENED,RESOLVED&ps=500`,
         {
           method: "GET",
           headers: {
-            Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`,
-            "Content-Type": "application/json",
-          },
+            Authorization: `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}` },
         }
-      );
-
-      if (!issuesResponse.ok) {
-        const errorText = await issuesResponse.text();
-        throw new Error(`SonarQube API request failed: ${errorText}`);
-      }
+      ); 
 
       const sonarData = await issuesResponse.json();
       if (!sonarData.issues) {
-        throw new Error("No issues array in SonarQube response");
+        throw new Error(`No issues found.`);
       }
 
       await this.sonarIssueRepo.delete({ project: { u_id: project.u_id } });
 
-      const issuesToSave = sonarData.issues.map((issue: any) => {
-        return this.sonarIssueRepo.create({
+      const issuesToSave = sonarData.issues.map((issue: any) =>
+        this.sonarIssueRepo.create({
           type: issue.type,
           severity: issue.severity,
           message: issue.message,
@@ -130,22 +157,21 @@ export class SonarQubeResolver {
           status: issue.status,
           resolution: issue.resolution,
           hash: issue.hash,
-          textRange: issue.textRange ? JSON.stringify(issue.textRange) : undefined,
-          flows: issue.flows ? JSON.stringify(issue.flows) : undefined,
+          textRange: JSON.stringify(issue.textRange),
+          flows: JSON.stringify(issue.flows),
           project,
-        });
-      });
+        })
+      );
 
       await this.sonarIssueRepo.save(issuesToSave);
+      project.result = "Analysis completed successfully";
+      await this.projectRepo.save(project);
 
-      return this.sonarIssueRepo.find({
-        where: { project: { u_id: project.u_id } },
-        order: { severity: "DESC", type: "ASC" },
-        relations: ["project"],
-      });
+      console.log(`Analysis completed for ${projectKey}`);
+      return this.sonarIssueRepo.find({ where: { project: { u_id: project.u_id } }, order: { severity: "DESC" } });
     } catch (error) {
-      console.error("Error in getSonarIssues:", error);
-      throw new Error("Failed to fetch SonarQube issues.");
+      console.error(`Error in analyzeRepo:`, error);
+      throw new Error(error instanceof Error ? error.message : String(error));
     }
   }
 }

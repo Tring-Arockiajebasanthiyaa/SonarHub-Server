@@ -44,13 +44,7 @@ passport.use(
           user.githubAccessToken = accessToken;
           await dataSource.getRepository(User).save(user);
         }
-        const { data: repos } = await axios.get("https://api.github.com/user/repos", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          params: { visibility: "private", per_page: 100 },
-        });
-
-        console.log("Private Repositories:", repos.map((repo: any) => repo.name));
-
+       
         const token = jwt.sign({ u_id: user.u_id }, process.env.JWT_SECRET!, {
           expiresIn: "1d",
         });
