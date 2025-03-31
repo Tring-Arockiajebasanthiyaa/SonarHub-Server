@@ -12,6 +12,7 @@ import { ObjectType, Field, ID } from "type-graphql";
 import { User } from "../../user/entity/user.entity";
 import { SonarIssue } from "../../SonarIssues/entity/sonarIssue.entity";
 import { CodeMetrics } from "../../codeMetrics/entity/codeMetrics.entity";
+import { GraphQLJSONObject } from "graphql-type-json";
 
 @Entity({ name: "projects" })
 @ObjectType()
@@ -40,7 +41,7 @@ export class Project {
   @Field({ nullable: true })
   result?: string;
   
-  @Column({ nullable: true })  // Temporary change
+  @Column({ nullable: true })
   @Field()
   githubUrl!: string;
 
@@ -60,6 +61,26 @@ export class Project {
   @Field()
   username!: string;
 
+  @Column({ type: "timestamp", nullable: true  })
+  @Field({ nullable: true })
+  analysisStartTime!: Date;
+
+  @Column({ type: "timestamp", nullable: true })
+  @Field({ nullable: true })
+  analysisEndTime?: Date;
+
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  analysisDuration?: number;
+
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  estimatedLinesOfCode?: number;
+
+  @Column({ type: "json", nullable: true })
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  languageDistribution?: Record<string, number>;
+
   @ManyToOne(() => User, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id", referencedColumnName: "u_id" })
   @Field(() => User)
@@ -69,9 +90,9 @@ export class Project {
   @Field(() => [SonarIssue], { nullable: true })
   sonarIssues?: SonarIssue[];
 
-  @OneToMany(() => CodeMetrics, (metrics) => metrics.project, { cascade: true })
-  @Field(() => [CodeMetrics], { nullable: true })
-  codeMetrics?: CodeMetrics[];
+  @OneToMany(() => CodeMetrics, (metrics) => metrics.project, { cascade: true, nullable: false })
+  @Field(() => [CodeMetrics], { nullable: false })
+  codeMetrics!: CodeMetrics[];
 
   @CreateDateColumn()
   @Field(() => String)
