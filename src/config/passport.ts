@@ -3,7 +3,6 @@ import { Strategy as GitHubStrategy, Profile } from "passport-github2";
 import { User } from "../modules/user/entity/user.entity";
 import dataSource from "../database/data-source";
 import jwt from "jsonwebtoken";
-import axios from "axios";
 passport.use(
   new GitHubStrategy(
     {

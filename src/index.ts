@@ -10,11 +10,10 @@ import session from "express-session";
 import { MyContext } from "./types/MyContext";
 import authRoutes from "./routes/authRoutes";
 import dataSource from "./database/data-source"; 
-
+import "./cronJob/cronJob";
 dotenv.config();
 
 async function startServer() {
-  // Initialize the data source
   await dataSource.initialize();
   console.log("Data Source has been initialized!");
 

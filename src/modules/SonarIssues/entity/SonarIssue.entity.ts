@@ -15,6 +15,10 @@ export class SonarIssue {
     @Field(() => ID)
     u_id!: string;
 
+    @Column() // Add this column
+    @Field()
+    key!: string; // SonarQube issue key
+
     @ManyToOne(() => Project, (project) => project.sonarIssues, { onDelete: "CASCADE" })
     @Field(() => Project)
     project!: Project;
@@ -38,6 +42,10 @@ export class SonarIssue {
     @Column()
     @Field()
     component!: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    projectVersion?: string; // Add this field
 
     @Column({ nullable: true })
     @Field({ nullable: true })
@@ -74,6 +82,10 @@ export class SonarIssue {
     @Column({ nullable: true })
     @Field({ nullable: true })
     flows?: string;
+
+    @Column({ nullable: true })
+    @Field({ nullable: true })
+    tags?: string; // Add this field
 
     @CreateDateColumn()
     @Field(() => String)

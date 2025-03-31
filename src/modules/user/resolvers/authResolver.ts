@@ -7,7 +7,6 @@ import { MyContext } from "../../../types/MyContext";
 import { AuthResponse} from "../../../graphql/AuthResponse";
 import passport from "passport";
 import "express-session";
-import { SessionData } from "express-session";
 import "../../../types/session";
 @Resolver()
 export class AuthResolver {
@@ -19,8 +18,6 @@ export class AuthResolver {
     return ctx.req.session.userEmail || null;
   }
   
-  
-
   @Query(() => AuthResponse, { nullable: true })
   async checkAuth(
     @Ctx() ctx: MyContext, 
@@ -43,7 +40,7 @@ export class AuthResolver {
     console.log("userContext",userContext);
     ctx.req.session.userEmail = userContext.email;
 
-  // 🔹 Explicitly save the session
+  
   await new Promise((resolve, reject) => {
     ctx.req.session.save((err) => {
       if (err) reject(err);
