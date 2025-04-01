@@ -19,7 +19,10 @@ export class SonarIssue {
     @Field()
     key!: string; 
 
-    @ManyToOne(() => Project, (project) => project.sonarIssues, { onDelete: "CASCADE" })
+    @ManyToOne(() => Project, (project) => project.sonarIssues, { 
+      onDelete: "CASCADE",
+      eager: true 
+    })
     @Field(() => Project)
     project!: Project;
 

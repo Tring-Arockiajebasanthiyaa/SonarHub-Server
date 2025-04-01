@@ -9,6 +9,7 @@ import fetch from "node-fetch";
 import { AnalysisResult } from "../graphql/types/AnalysisResult";
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { LocReport } from "../graphql/types/LocReport";
+import path from 'path';
 
 dotenv.config();
 
@@ -176,15 +177,13 @@ export class SonarQubeResolver {
     const projectKey = `${user.username}_${repo.name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
     const authHeader = `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`;
     
-    // First get the latest lines of code data from GitHub
     const locData = await this.getRepositoryLinesOfCode(user, repo);
     
     let project = await this.projectRepo.findOne({ 
       where: { repoName: projectKey },
-      relations: ["codeMetrics"] // Ensure we load existing metrics
+      relations: ["codeMetrics"] 
     });
 
-    // Initialize with current timestamp
     const analysisStartTime = new Date();
   
     if (!project) {
@@ -217,15 +216,12 @@ export class SonarQubeResolver {
         await this.metricsRepo.remove(project.codeMetrics);
       }
     }
-  
-    // Save the project first to ensure we have the latest data
+
     await this.projectRepo.save(project);
   
     try {
       await this.configureSonarQubeProject(user, project, repo, authHeader);
       await this.triggerSonarQubeAnalysis(project, authHeader);
-      
-      // Update with final status
       const analysisEndTime = new Date();
       project.result = "Analysis completed";
       project.analysisEndTime = analysisEndTime;
@@ -233,8 +229,6 @@ export class SonarQubeResolver {
         (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
       );
       project.lastAnalysisDate = new Date();
-      
-      // Save again with final status
       await this.projectRepo.save(project);
     } catch (error) {
       const analysisEndTime = new Date();
@@ -258,7 +252,6 @@ export class SonarQubeResolver {
     const projectKey = project.repoName;
     
     try {
-      // Check if project exists in SonarQube
       const projectResponse = await fetch(
         `${SONARQUBE_API_URL}/api/projects/search?projects=${projectKey}`,
         { headers: { Authorization: authHeader } }
@@ -267,8 +260,6 @@ export class SonarQubeResolver {
       if (!projectResponse.ok) throw new Error(await projectResponse.text());
   
       const projectData = await projectResponse.json();
-      
-      // Create project if it doesn't exist
       if (projectData.components.length === 0) {
         const createResponse = await fetch(`${SONARQUBE_API_URL}/api/projects/create`, {
           method: "POST",
@@ -285,15 +276,16 @@ export class SonarQubeResolver {
   
         if (!createResponse.ok) throw new Error(await createResponse.text());
       }
-  
-      // Configure project properties
+
       const propertiesToSet = [
         { key: 'sonar.projectKey', value: projectKey },
         { key: 'sonar.projectName', value: repo.name },
         { key: 'sonar.scm.provider', value: 'git' },
         { key: 'sonar.scm.url', value: repo.html_url },
         { key: 'sonar.links.scm', value: repo.html_url },
-        { key: 'sonar.links.homepage', value: repo.html_url }
+        { key: 'sonar.links.homepage', value: repo.html_url },
+        { key: 'sonar.github.repository', value: repo.full_name },
+        { key: 'sonar.github.oauth', value: user.githubAccessToken || '' }
       ];
     
       for (const prop of propertiesToSet) {
@@ -320,7 +312,6 @@ export class SonarQubeResolver {
       throw new Error(error instanceof Error ? error.message : String(error));
     }
   }
-
   private async configureSonarQubeWebhook(project: Project, authHeader: string) {
     try {
       const webhookName = `Analysis_${project.repoName}`;
@@ -351,95 +342,213 @@ export class SonarQubeResolver {
       throw error;
     }
   }
-
   private async triggerSonarQubeAnalysis(project: Project, authHeader: string): Promise<boolean> {
     try {
-        await this.configureSonarQubeWebhook(project, authHeader);
-
-        const scannerParams = {
-            'sonar.projectKey': project.repoName,
-            'sonar.projectName': project.title,
-            'sonar.host.url': process.env.SONARQUBE_API_URL || '',
-            'sonar.login': process.env.SONARQUBE_API_TOKEN || '',
-            'sonar.scm.provider': 'git',
-            'sonar.scm.url': project.githubUrl,
-            'sonar.sourceEncoding': 'UTF-8',
-            'sonar.sources': '.'
-        };
-
-        try {
-            const { exec } = require('child_process') as typeof import('child_process');
-            const scannerCommand = `sonar-scanner ${Object.entries(scannerParams)
-                .map(([k, v]) => `-D${k}="${v}"`)
-                .join(' ')}`;
-
-            console.log('Executing SonarScanner with command:', scannerCommand);
-            
-            const analysisPromise = new Promise<string>((resolve, reject) => {
-                exec(scannerCommand, (error: Error | null, stdout: string, stderr: string) => {
-                    if (error) {
-                        console.error('SonarScanner execution error:', error);
-                        console.error('Stderr:', stderr);
-                        reject(error);
-                        return;
-                    }
-                    console.log('SonarScanner output:', stdout);
-                    resolve(stdout);
-                });
-            });
-
-            await analysisPromise;
-        } catch (cliError: unknown) {
-            console.error('Failed to execute SonarScanner:', cliError);
-            throw new Error('SonarScanner execution failed');
+      await this.configureSonarQubeWebhook(project, authHeader);
+  
+      const user = await this.userRepo.findOne({
+        where: { username: project.username },
+        select: ["u_id", "githubAccessToken"]
+      });
+  
+      if (!user || !user.githubAccessToken) {
+        throw new Error(`GitHub access token not found for user ${project.username}`);
+      }
+  
+      await this.ensureSonarQubeProject(project, authHeader);
+      await this.updateProjectSettings(project, authHeader, user.githubAccessToken);
+  
+      const repoContentsResponse = await fetch(
+        `${GITHUB_API_URL}/repos/${project.username}/${project.title}/contents`,
+        {
+          headers: {
+            Authorization: `Bearer ${user.githubAccessToken}`,
+            Accept: "application/vnd.github.v3+json"
+          }
         }
-
-        await this.waitForProjectAnalysis(project, authHeader);
-        
+      );
+  
+      if (repoContentsResponse.status === 404 || (repoContentsResponse.ok && (await repoContentsResponse.json()).length === 0)) {
+        project.languageDistribution = {};
+        project.result = "Analysis completed (empty repository)";
+        project.analysisEndTime = new Date();
+        await this.projectRepo.save(project);
         return true;
-    } catch (error: unknown) {
-        console.error(`[triggerSonarQubeAnalysis] Error:`, error);
-        throw error;
+      }
+  
+      if (!repoContentsResponse.ok) {
+        throw new Error(`Failed to check repository contents: ${await repoContentsResponse.text()}`);
+      }
+  
+      const fs = require('fs');
+      const os = require('os');
+      const path = require('path');
+      const { execSync, exec } = require('child_process');
+  
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonar-'));
+      const repoPath = path.join(tempDir, "repo");
+  
+      try {
+        console.log(`Cloning repository: ${project.githubUrl} into ${repoPath}`);
+        execSync(`git clone ${project.githubUrl} ${repoPath}`, { stdio: 'inherit' });
+  
+        const propertiesFile = path.join(repoPath, 'sonar-project.properties');
+        const scannerProperties = [
+          `sonar.projectKey=${project.repoName}`,
+          `sonar.projectName=${project.title}`,
+          `sonar.host.url=${SONARQUBE_API_URL}`,
+          `sonar.login=${SONARQUBE_API_TOKEN}`,
+          `sonar.scm.provider=git`,
+          `sonar.sourceEncoding=UTF-8`,
+          `sonar.scm.forceReloadAll=true`,
+          `sonar.scm.revision=HEAD`,
+          `sonar.scm.disabled=false`,
+          `sonar.scm.exclusions.disabled=true`
+        ].join('\n');
+  
+        fs.writeFileSync(propertiesFile, scannerProperties);
+        console.log('SonarQube properties file created.');
+        const scannerCommand = `sonar-scanner -Dproject.settings=${propertiesFile} -Dsonar.projectBaseDir=${repoPath}`;
+        console.log('Executing SonarScanner:', scannerCommand);
+  
+        await new Promise<void>((resolve, reject) => {
+          exec(scannerCommand, (error: Error | null, stdout: string, stderr: string) => {
+            if (error) {
+              console.error('SonarScanner execution error:', error, stderr);
+              reject(error);
+            } else {
+              console.log('SonarScanner output:', stdout);
+              resolve();
+            }
+          });
+        });
+  
+        return await this.waitForProjectAnalysis(project, authHeader);
+      } catch (cliError) {
+        console.error('Failed to execute SonarScanner:', cliError);
+        throw new Error('SonarScanner execution failed');
+      } finally {
+        try {
+          console.log(`Deleting temporary repo at ${repoPath}`);
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch (cleanupError) {
+          console.error('Error cleaning up temporary files:', cleanupError);
+        }
+      }
+    } catch (error) {
+      console.error(`[triggerSonarQubeAnalysis] Error:`, error);
+      throw new Error(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  private async waitForProjectAnalysis(
-    project: Project,
-    authHeader: string
-  ) {
+  private async ensureSonarQubeProject(project: Project, authHeader: string) {
+    try {
+      
+      const projectResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/projects/search?projects=${project.repoName}`,
+        { headers: { Authorization: authHeader } }
+      );
+  
+      if (!projectResponse.ok) throw new Error(await projectResponse.text());
+  
+      const projectData = await projectResponse.json();
+      
+      if (projectData.components.length === 0) {
+        const createResponse = await fetch(`${SONARQUBE_API_URL}/api/projects/create`, {
+          method: "POST",
+          headers: {
+            Authorization: authHeader,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            name: project.title,
+            project: project.repoName,
+            visibility: "public",
+          }).toString(),
+        });
+  
+        if (!createResponse.ok) throw new Error(await createResponse.text());
+      }
+    } catch (error) {
+      console.error(`[ensureSonarQubeProject] Error:`, error);
+      throw error;
+    }
+  }
+  private async updateProjectSettings(project: Project, authHeader: string, githubToken: string) {
+    const settings = [
+      { key: 'sonar.projectKey', value: project.repoName },
+      { key: 'sonar.projectName', value: project.title },
+      { key: 'sonar.scm.provider', value: 'git' },
+      { key: 'sonar.scm.url', value: project.githubUrl },
+      { key: 'sonar.links.scm', value: project.githubUrl },
+      { key: 'sonar.links.homepage', value: project.githubUrl },
+      { key: 'sonar.host.url', value: SONARQUBE_API_URL || '' },
+      { key: 'sonar.login', value: SONARQUBE_API_TOKEN || '' },
+      { key: 'sonar.sourceEncoding', value: 'UTF-8' },
+      { key: 'sonar.github.repository', value: project.githubUrl.replace('https://github.com/', '') },
+      { key: 'sonar.github.oauth', value: githubToken },
+      { key: 'sonar.scm.disabled', value: 'false' },
+      { key: 'sonar.scm.exclusions.disabled', value: 'true' },
+      { key: 'sonar.analysis.mode', value: 'issues' },
+      { key: 'sonar.analysis.skipPublish', value: 'false' },
+      { key: 'sonar.scm.forceReloadAll', value: 'true' },
+      { key: 'sonar.scm.revision', value: 'HEAD' }
+    ];
+  
+    for (const setting of settings) {
+      try {
+        const response = await fetch(`${SONARQUBE_API_URL}/api/settings/set`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            key: setting.key,
+            value: setting.value,
+            component: project.repoName
+          }).toString()
+        });
+  
+        if (!response.ok) {
+          console.warn(`Failed to set setting ${setting.key}:`, await response.text());
+        }
+      } catch (error) {
+        console.error(`Error setting ${setting.key}:`, error);
+      }
+    }
+  }
+  private async waitForProjectAnalysis(project: Project, authHeader: string) {
     let attempts = 0;
-    const maxAttempts = 30; // 30 attempts * 10 seconds = 5 minutes max
-    let lastAnalysisDate = project.lastAnalysisDate;
-
+    const maxAttempts = 30; 
+  
     while (attempts < maxAttempts) {
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-
+  
       try {
-        const projectStatus = await fetch(
-          `${SONARQUBE_API_URL}/api/project_analyses/search?project=${project.repoName}`,
+        const ceActivityResponse = await fetch(
+          `${SONARQUBE_API_URL}/api/ce/component?component=${project.repoName}`,
           { headers: { Authorization: authHeader } }
         );
-
-        if (projectStatus.ok) {
-          const statusData = await projectStatus.json();
-          if (statusData.analyses && statusData.analyses.length > 0) {
-            const latestAnalysis = statusData.analyses[0];
-            const analysisDate = new Date(latestAnalysis.date);
-            
-            if (!lastAnalysisDate || analysisDate > lastAnalysisDate) {
-              // New analysis found
-              return true;
-            }
+  
+        if (ceActivityResponse.ok) {
+          const activityData = await ceActivityResponse.json();
+          const currentTask = activityData.current && activityData.current.status;
+          
+          if (currentTask === 'SUCCESS') {
+            return true;
+          }
+          if (currentTask === 'FAILED') {
+            throw new Error(`Analysis failed: ${activityData.current.errorMessage || 'Unknown error'}`);
           }
         }
       } catch (error) {
         console.error('Error checking analysis status:', error);
       }
     }
-
+  
     throw new Error('Analysis did not complete within expected time');
   }
-  // In SonarQubeResolver class
 @Mutation(() => Boolean)
 public async handleAnalysisCompletion(
   @Arg("projectId") projectId: string,
@@ -473,7 +582,6 @@ public async handleAnalysisCompletion(
       let totalLines = 0;
       const languages: Record<string, number> = {};
       
-      // Language-specific line estimates (bytes per line)
       const bytesPerLine: Record<string, number> = {
         'JavaScript': 20,
         'TypeScript': 20,
@@ -505,7 +613,6 @@ public async handleAnalysisCompletion(
       return { totalLines: 0, languages: {} };
     }
   }
-  // In SonarQubeResolver class
 @Mutation(() => Boolean)
 public async handleWebhookEvent(
   @Arg("projectId") projectId: string,
@@ -542,125 +649,182 @@ public async handleWebhookEvent(
       return false;
   }
  }
-  private async storeAnalysisResults(
-    project: Project,
-    authHeader: string
-  ) {
-    try {
-      const branchName = project.defaultBranch || 'main';
-      
-      // Get issues
+ private async storeAnalysisResults(project: Project, authHeader: string) {
+  try {
+    const branchName = project.defaultBranch || 'main';
+    await this.sonarIssueRepo.delete({ project: { u_id: project.u_id } });
+    const metricsResponse = await fetch(
+      `${SONARQUBE_API_URL}/api/measures/component?component=${project.repoName}&branch=${branchName}&metricKeys=` +
+      'ncloc,ncloc_language_distribution,languages,files,coverage,duplicated_lines_density,' +
+      'violations,complexity,sqale_index,reliability_rating,security_rating,security_review_rating,' +
+      'sqale_debt_ratio,bugs,vulnerabilities,code_smells,new_technical_debt',
+      { headers: { Authorization: authHeader } }
+    );
+
+    if (!metricsResponse.ok) throw new Error(await metricsResponse.text());
+
+    const metricsData = await metricsResponse.json();
+    const measures = metricsData.component.measures || [];
+
+    const qualityGateResponse = await fetch(
+      `${SONARQUBE_API_URL}/api/qualitygates/project_status?projectKey=${project.repoName}&branch=${branchName}`,
+      { headers: { Authorization: authHeader } }
+    );
+
+    let qualityGateStatus = 'UNKNOWN';
+    if (qualityGateResponse.ok) {
+      const qualityGateData = await qualityGateResponse.json();
+      qualityGateStatus = qualityGateData.projectStatus.status;
+    }
+
+    let page = 1;
+    let totalIssues = 0;
+    let fetchedIssues = 0;
+    const allIssues: SonarIssue[] = [];
+
+    do {
       const issuesResponse = await fetch(
-        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${project.repoName}&resolved=false`,
+        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${project.repoName}&branch=${branchName}&ps=500&p=${page}`,
         { headers: { Authorization: authHeader } }
       );
-      
-      if (!issuesResponse.ok) throw new Error(await issuesResponse.text());
+
+      if (!issuesResponse.ok) {
+        throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
+      }
 
       const issuesData = await issuesResponse.json();
-      const issues = issuesData.issues.map((issue: any) => {
-        const newIssue = new SonarIssue();
-        newIssue.key = issue.key;
-        newIssue.project = project;
-        newIssue.type = issue.type;
-        newIssue.severity = issue.severity;
-        newIssue.message = issue.message;
-        newIssue.rule = issue.rule;
-        newIssue.component = issue.component;
-        newIssue.line = issue.line;
-        newIssue.status = issue.status;
-        newIssue.resolution = issue.resolution;
-        return newIssue;
-      });
+      totalIssues = issuesData.total || 0;
+      fetchedIssues += issuesData.issues?.length || 0;
 
-      await this.sonarIssueRepo.save(issues);
+      if (issuesData.issues && issuesData.issues.length > 0) {
+        const transformedIssues = issuesData.issues.map((issue: any) => {
+          const newIssue = new SonarIssue();
+          newIssue.key = issue.key;
+          newIssue.type = issue.type;
+          newIssue.severity = issue.severity;
+          newIssue.message = issue.message;
+          newIssue.rule = issue.rule;
+          newIssue.component = issue.component;
+          newIssue.line = issue.line || 0;
+          newIssue.status = issue.status;
+          newIssue.resolution = issue.resolution;
+          newIssue.project = project;
+          return newIssue;
+        });
 
-      const metricsResponse = await fetch(
-        `${SONARQUBE_API_URL}/api/measures/component?component=${project.repoName}&metricKeys=ncloc,ncloc_language_distribution,languages`,
-        { headers: { Authorization: authHeader } }
-      );
-  
-      if (!metricsResponse.ok) throw new Error(await metricsResponse.text());
-  
-      const metricsData = await metricsResponse.json();
-      const measures = metricsData.component.measures || [];
-  
-      // Update language distribution
-      const languageMeasure = measures.find((m:any ) => m.metric === "ncloc_language_distribution");
-      if (languageMeasure) {
-        project.languageDistribution = this.parseLanguageDistribution(languageMeasure.value);
-      }
-  
-      // Get the list of languages
-      const languagesMeasure = measures.find((m:any )=> m.metric === "languages");
-      if (languagesMeasure) {
-        const languages = languagesMeasure.value.split(',');
-        console.log(languages,"Languages");
+        allIssues.push(...transformedIssues);
       }
 
-      const codeMetrics = new CodeMetrics();
-      codeMetrics.project = project;
-      codeMetrics.branch = branchName;
-      codeMetrics.language = this.detectLanguage(measures);
-      
-      measures.forEach((measure: any) => {
-        switch (measure.metric) {
-          case "ncloc":
-            codeMetrics.linesOfCode = parseInt(measure.value);
-            break;
-          case "ncloc_language_distribution":
-            project.languageDistribution = this.parseLanguageDistribution(measure.value);
-            break;
-          case "coverage":
-            codeMetrics.coverage = parseFloat(measure.value);
-            break;
-          case "duplicated_lines_density":
-            codeMetrics.duplicatedLines = parseFloat(measure.value);
-            break;
-          case "violations":
-            codeMetrics.violations = parseInt(measure.value);
-            break;
-          case "files":
-            codeMetrics.filesCount = parseInt(measure.value);
-            break;
-          case "complexity":
-            codeMetrics.complexity = parseInt(measure.value);
-            break;
-          case "sqale_index":
-            codeMetrics.technicalDebt = parseInt(measure.value);
-            break;
-        }
-      });
+      page++;
+    } while (fetchedIssues < totalIssues);
 
-      await this.metricsRepo.save(codeMetrics);
-      await this.projectRepo.save(project);
-
-    } catch (error) {
-      console.error(`[storeAnalysisResults] Error storing results:`, error);
-      throw error;
+    if (allIssues.length > 0) {
+      await this.sonarIssueRepo.save(allIssues);
+      console.log(`Saved ${allIssues.length} issues to database`);
+    } else {
+      console.log('No issues found to save');
     }
-  }
 
-  private parseLanguageDistribution(distribution: string): Record<string, number> {
-    const result: Record<string, number> = {};
-    if (!distribution) return result;
-    
-    distribution.split(';').forEach(item => {
-      const [lang, lines] = item.split('=');
-      if (lang && lines) {
-        result[lang] = parseInt(lines);
+    let codeMetrics = await this.metricsRepo.findOne({ 
+      where: { 
+        project: { u_id: project.u_id },
+        branch: branchName
       }
     });
-    
-    return result;
-  }
 
-  private detectLanguage(measures: any[]): string {
-    const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");
-    if (languageMeasure) {
-      const languages = languageMeasure.value.split(';');
-      return languages[0].split('=')[0] || "unknown";
+    if (!codeMetrics) {
+      codeMetrics = new CodeMetrics();
+      codeMetrics.project = project;
+      codeMetrics.branch = branchName;
     }
-    return "unknown";
+
+    // Update all metrics
+    measures.forEach((measure: any) => {
+      switch (measure.metric) {
+        case "ncloc":
+          codeMetrics.linesOfCode = parseInt(measure.value) || 0;
+          break;
+        case "files":
+          codeMetrics.filesCount = parseInt(measure.value) || 0;
+          break;
+        case "coverage":
+          codeMetrics.coverage = parseFloat(measure.value) || 0;
+          break;
+        case "duplicated_lines_density":
+          codeMetrics.duplicatedLines = parseFloat(measure.value) || 0;
+          break;
+        case "violations":
+          codeMetrics.violations = parseInt(measure.value) || 0;
+          break;
+        case "complexity":
+          codeMetrics.complexity = parseInt(measure.value) || 0;
+          break;
+        case "sqale_index":
+          codeMetrics.technicalDebt = parseInt(measure.value) || 0;
+          break;
+        case "reliability_rating":
+          codeMetrics.reliabilityRating = parseFloat(measure.value) || 0;
+          break;
+        case "security_rating":
+          codeMetrics.securityRating = parseFloat(measure.value) || 0;
+          break;
+        case "bugs":
+          codeMetrics.bugs = parseInt(measure.value) || 0;
+          break;
+        case "vulnerabilities":
+          codeMetrics.vulnerabilities = parseInt(measure.value) || 0;
+          break;
+        case "code_smells":
+          codeMetrics.codeSmells = parseInt(measure.value) || 0;
+          break;
+        case "sqale_debt_ratio":
+          codeMetrics.debtRatio = parseFloat(measure.value) || 0;
+          break;
+      }
+    });
+
+    // Store quality gate status
+    codeMetrics.qualityGateStatus = qualityGateStatus;
+
+    // Detect primary language
+    codeMetrics.language = this.detectLanguage(measures);
+
+    await this.metricsRepo.save(codeMetrics);
+    await this.projectRepo.save(project);
+
+    console.log(`Successfully stored ${allIssues.length} issues for project ${project.repoName}`);
+
+  } catch (error) {
+    console.error(`[storeAnalysisResults] Error storing results:`, error);
+    throw error;
   }
+}
+
+
+private parseLanguageDistribution(distribution: string): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!distribution) return result;
+  
+  // Handle both formats: "java=123;js=45" and "java=123,js=45"
+  const items = distribution.split(/[;,]/).filter(item => item.includes('='));
+  
+  items.forEach(item => {
+    const [lang, lines] = item.split('=');
+    if (lang && lines && !isNaN(Number(lines))) {
+      result[lang.trim()] = parseInt(lines);
+    }
+  });
+  return Object.fromEntries(
+    Object.entries(result).sort(([,a], [,b]) => b - a)
+  );
+}
+
+private detectLanguage(measures: any[]): string {
+  const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");
+  if (languageMeasure) {
+    const distribution = this.parseLanguageDistribution(languageMeasure.value);
+    return Object.keys(distribution)[0] || "unknown";
+  }
+  return "unknown";
+ }
 }

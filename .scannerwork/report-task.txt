@@ -1,6 +1,6 @@
-projectKey=Tring-Arockiajebasanthiyaa_week6-persona
+projectKey=Tring-Arockiajebasanthiyaa_Week_6
 serverUrl=http://localhost:9000
 serverVersion=25.3.0.104237
-dashboardUrl=http://localhost:9000/dashboard?id=Tring-Arockiajebasanthiyaa_week6-persona
-ceTaskId=524b9cf8-df35-44b9-a71c-d167409e7408
-ceTaskUrl=http://localhost:9000/api/ce/task?id=524b9cf8-df35-44b9-a71c-d167409e7408
+dashboardUrl=http://localhost:9000/dashboard?id=Tring-Arockiajebasanthiyaa_Week_6
+ceTaskId=40c5eb33-6fae-497f-9aeb-3c1b8b727805
+ceTaskUrl=http://localhost:9000/api/ce/task?id=40c5eb33-6fae-497f-9aeb-3c1b8b727805

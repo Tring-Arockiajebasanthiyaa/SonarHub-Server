@@ -55,6 +55,27 @@ export class CodeMetrics {
   @Field({ nullable: true })
   technicalDebt?: number;
 
+  @Column({ type: 'float', nullable: true })
+  reliabilityRating!: number;
+  
+  @Column({ type: 'float', nullable: true })
+  securityRating!: number;
+  
+  @Column({ type: 'int', nullable: true })
+  bugs!: number;
+  
+  @Column({ type: 'int', nullable: true })
+  vulnerabilities!: number;
+  
+  @Column({ type: 'int', nullable: true })
+  codeSmells!: number;
+  
+  @Column({ type: 'float', nullable: true })
+  debtRatio!: number;
+  
+  @Column({ type: 'varchar', nullable: true })
+  qualityGateStatus!: string;
+
   @CreateDateColumn()
   @Field(() => String)
   createdAt!: Date;
