@@ -33,7 +33,6 @@ async function runAnalysisForAllUsers() {
   }
 }
 
-// Schedule the job to run every day at midnight
 cron.schedule("0 0 * * *", runAnalysisForAllUsers);
 
 console.log("Cron job scheduled for all users.");

@@ -60,12 +60,10 @@ export class SonarQubeResolver {
         throw new Error(`Project "${repoName}" not found for user ${githubUsername}`);
       }
 
-      // Calculate total lines from all branches
       const totalLines = project.codeMetrics.reduce((sum, metric) => {
         return sum + (metric.linesOfCode || 0);
       }, 0);
 
-      // Get SonarQube analyzed lines (from default branch)
       const defaultBranchMetric = project.codeMetrics.find(m => m.branch === project.defaultBranch);
       const sonarQubeLines = defaultBranchMetric?.linesOfCode || 0;
 
@@ -123,8 +121,6 @@ export class SonarQubeResolver {
     @Arg("repoName") repoName: string
   ): Promise<AnalysisResult> {
     try {
-      console.log(`Starting analysis for ${githubUsername}/${repoName}`);
-      
       const user = await this.userRepo.findOne({ 
         where: { username: githubUsername },
         select: ["u_id", "username", "githubAccessToken"]
@@ -193,7 +189,7 @@ export class SonarQubeResolver {
         description: repo.description || `Analysis for ${repo.name}`,
         githubUrl: repo.html_url,
         isPrivate: repo.private,
-        defaultBranch: repo.default_branch,
+        defaultBranch: repo.default_branch || 'main',
         user,
         estimatedLinesOfCode: locData.totalLines,
         languageDistribution: locData.languages,
@@ -202,16 +198,14 @@ export class SonarQubeResolver {
         result: "In Progress"
       });
     } else {
-      // For existing projects, ensure we update all relevant fields
       project.githubUrl = repo.html_url;
       project.isPrivate = repo.private;
-      project.defaultBranch = repo.default_branch;
+      project.defaultBranch = repo.default_branch || 'main';
       project.estimatedLinesOfCode = locData.totalLines;
       project.languageDistribution = locData.languages;
       project.analysisStartTime = analysisStartTime;
       project.result = "In Progress";
       
-      // Clear existing metrics to prevent duplicates
       if (project.codeMetrics) {
         await this.metricsRepo.remove(project.codeMetrics);
       }
@@ -237,7 +231,6 @@ export class SonarQubeResolver {
       project.analysisDuration = Math.floor(
         (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
       );
-      
       await this.projectRepo.save(project);
       throw error;
     }
@@ -312,13 +305,47 @@ export class SonarQubeResolver {
       throw new Error(error instanceof Error ? error.message : String(error));
     }
   }
+
   private async configureSonarQubeWebhook(project: Project, authHeader: string) {
     try {
       const webhookName = `Analysis_${project.repoName}`;
       const webhookUrl = `${process.env.WEBHOOK_URL}?projectId=${project.u_id}`;
       
-      const response = await fetch(
-        `${process.env.SONARQUBE_API_URL}/api/webhooks/create`,
+      const listResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/webhooks/list`,
+        { headers: { Authorization: authHeader } }
+      );
+
+      if (listResponse.ok) {
+        const webhooks = await listResponse.json();
+        const existingWebhook = webhooks.webhooks.find((wh: any) => wh.name === webhookName);
+        
+        if (existingWebhook) {
+          console.log(`Updating existing webhook for project ${project.repoName}`);
+          const updateResponse = await fetch(
+            `${SONARQUBE_API_URL}/api/webhooks/update`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: authHeader,
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({
+                webhook: existingWebhook.key,
+                name: webhookName,
+                url: webhookUrl,
+                secret: process.env.WEBHOOK_SECRET || ''
+              }).toString(),
+            }
+          );
+          if (!updateResponse.ok) throw new Error(await updateResponse.text());
+          return;
+        }
+      }
+
+      console.log(`Creating new webhook for project ${project.repoName}`);
+      const createResponse = await fetch(
+        `${SONARQUBE_API_URL}/api/webhooks/create`,
         {
           method: "POST",
           headers: {
@@ -334,14 +361,20 @@ export class SonarQubeResolver {
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to create webhook: ${await response.text()}`);
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        if (errorData.errors?.[0]?.msg?.includes('Maximum number of webhook reached')) {
+          console.warn('Maximum webhooks reached, proceeding without webhook');
+          return;
+        }
+        throw new Error(`Failed to create webhook: ${await createResponse.text()}`);
       }
     } catch (error) {
       console.error(`[configureSonarQubeWebhook] Error:`, error);
       throw error;
     }
   }
+
   private async triggerSonarQubeAnalysis(project: Project, authHeader: string): Promise<boolean> {
     try {
       await this.configureSonarQubeWebhook(project, authHeader);
@@ -389,7 +422,7 @@ export class SonarQubeResolver {
       const repoPath = path.join(tempDir, "repo");
   
       try {
-        console.log(`Cloning repository: ${project.githubUrl} into ${repoPath}`);
+        console.log(`Cloning repository: ${project.githubUrl}`);
         execSync(`git clone ${project.githubUrl} ${repoPath}`, { stdio: 'inherit' });
   
         const propertiesFile = path.join(repoPath, 'sonar-project.properties');
@@ -407,9 +440,10 @@ export class SonarQubeResolver {
         ].join('\n');
   
         fs.writeFileSync(propertiesFile, scannerProperties);
-        console.log('SonarQube properties file created.');
+        console.log('SonarQube properties file created');
+        
         const scannerCommand = `sonar-scanner -Dproject.settings=${propertiesFile} -Dsonar.projectBaseDir=${repoPath}`;
-        console.log('Executing SonarScanner:', scannerCommand);
+        console.log(`Executing SonarScanner: ${scannerCommand}`);
   
         await new Promise<void>((resolve, reject) => {
           exec(scannerCommand, (error: Error | null, stdout: string, stderr: string) => {
@@ -429,7 +463,6 @@ export class SonarQubeResolver {
         throw new Error('SonarScanner execution failed');
       } finally {
         try {
-          console.log(`Deleting temporary repo at ${repoPath}`);
           fs.rmSync(tempDir, { recursive: true, force: true });
         } catch (cleanupError) {
           console.error('Error cleaning up temporary files:', cleanupError);
@@ -440,39 +473,35 @@ export class SonarQubeResolver {
       throw new Error(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
   private async ensureSonarQubeProject(project: Project, authHeader: string) {
-    try {
-      
-      const projectResponse = await fetch(
-        `${SONARQUBE_API_URL}/api/projects/search?projects=${project.repoName}`,
-        { headers: { Authorization: authHeader } }
-      );
-  
-      if (!projectResponse.ok) throw new Error(await projectResponse.text());
-  
-      const projectData = await projectResponse.json();
-      
-      if (projectData.components.length === 0) {
-        const createResponse = await fetch(`${SONARQUBE_API_URL}/api/projects/create`, {
-          method: "POST",
-          headers: {
-            Authorization: authHeader,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            name: project.title,
-            project: project.repoName,
-            visibility: "public",
-          }).toString(),
-        });
-  
-        if (!createResponse.ok) throw new Error(await createResponse.text());
-      }
-    } catch (error) {
-      console.error(`[ensureSonarQubeProject] Error:`, error);
-      throw error;
+    const projectResponse = await fetch(
+      `${SONARQUBE_API_URL}/api/projects/search?projects=${project.repoName}`,
+      { headers: { Authorization: authHeader } }
+    );
+
+    if (!projectResponse.ok) throw new Error(await projectResponse.text());
+
+    const projectData = await projectResponse.json();
+    
+    if (projectData.components.length === 0) {
+      const createResponse = await fetch(`${SONARQUBE_API_URL}/api/projects/create`, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          name: project.title,
+          project: project.repoName,
+          visibility: "public",
+        }).toString(),
+      });
+
+      if (!createResponse.ok) throw new Error(await createResponse.text());
     }
   }
+
   private async updateProjectSettings(project: Project, authHeader: string, githubToken: string) {
     const settings = [
       { key: 'sonar.projectKey', value: project.repoName },
@@ -517,13 +546,15 @@ export class SonarQubeResolver {
       }
     }
   }
+
   private async waitForProjectAnalysis(project: Project, authHeader: string) {
     let attempts = 0;
-    const maxAttempts = 30; 
+    const maxAttempts = 30;
+    let lastError: Error | null = null;
   
     while (attempts < maxAttempts) {
       attempts++;
-      await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+      await new Promise(resolve => setTimeout(resolve, 10000));
   
       try {
         const ceActivityResponse = await fetch(
@@ -536,6 +567,8 @@ export class SonarQubeResolver {
           const currentTask = activityData.current && activityData.current.status;
           
           if (currentTask === 'SUCCESS') {
+            console.log('Analysis completed successfully, storing results');
+            await this.storeAnalysisResults(project, authHeader);
             return true;
           }
           if (currentTask === 'FAILED') {
@@ -543,24 +576,21 @@ export class SonarQubeResolver {
           }
         }
       } catch (error) {
-        console.error('Error checking analysis status:', error);
+        if (error instanceof Error) {
+          lastError = error;
+        } else {
+          lastError = new Error(String(error));
+        }
       }
+    }
+  
+    if (lastError) {
+      throw lastError;
     }
   
     throw new Error('Analysis did not complete within expected time');
   }
-@Mutation(() => Boolean)
-public async handleAnalysisCompletion(
-  @Arg("projectId") projectId: string,
-  @Arg("authHeader") authHeader: string
-) {
-  const project = await this.projectRepo.findOne({ where: { u_id: projectId } });
-  if (!project) {
-    throw new Error('Project not found');
-  }
-  await this.storeAnalysisResults(project, authHeader);
-  return true;
-}
+
   private async getRepositoryLinesOfCode(
     user: User,
     repo: any
@@ -601,7 +631,7 @@ public async handleAnalysisCompletion(
       };
 
       for (const [language, bytes] of Object.entries(languagesData)) {
-        const avgBytesPerLine = bytesPerLine[language] || 20; // Default to 20 bytes/line
+        const avgBytesPerLine = bytesPerLine[language] || 20;
         const lines = Math.floor(Number(bytes) / avgBytesPerLine);
         languages[language] = Math.round(lines);
         totalLines += lines;
@@ -613,218 +643,274 @@ public async handleAnalysisCompletion(
       return { totalLines: 0, languages: {} };
     }
   }
-@Mutation(() => Boolean)
-public async handleWebhookEvent(
-  @Arg("projectId") projectId: string,
-  @Arg("status") status: string,
-  @Arg("authHeader") authHeader: string
-) {
-  const project = await this.projectRepo.findOne({ where: { u_id: projectId } });
-  if (!project) {
-    throw new Error('Project not found');
-  }
 
-  switch (status) {
-    case 'SUCCESS':
-      project.result = 'Analysis completed';
+  @Mutation(() => Boolean)
+  public async handleWebhookEvent(
+    @Arg("projectId") projectId: string,
+    @Arg("status") status: string,
+    @Arg("authHeader") authHeader: string
+  ) {
+    const queryRunner = dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+  
+    try {
+      const project = await queryRunner.manager.findOne(Project, { 
+        where: { u_id: projectId },
+        relations: ["codeMetrics", "sonarIssues"]
+      });
+  
+      if (!project) {
+        throw new Error('Project not found');
+      }
+  
       project.analysisEndTime = new Date();
       project.analysisDuration = Math.floor(
-        (new Date().getTime() - project.analysisStartTime.getTime()) / 1000
+        (project.analysisEndTime.getTime() - project.analysisStartTime.getTime()) / 1000
       );
-      await this.projectRepo.save(project);
-      await this.storeAnalysisResults(project, authHeader);
+  
+      if (status === 'SUCCESS') {
+        project.result = 'Analysis completed';
+        await queryRunner.manager.save(project);
+        await this.storeAnalysisResults(project, authHeader);
+      } else if (status === 'FAILED') {
+        project.result = 'Analysis failed';
+        await queryRunner.manager.save(project);
+      }
+  
+      await queryRunner.commitTransaction();
       return true;
-
-    case 'FAILED':
-      project.result = 'Analysis failed';
-      project.analysisEndTime = new Date();
-      project.analysisDuration = Math.floor(
-        (new Date().getTime() - project.analysisStartTime.getTime()) / 1000
-      );
-      await this.projectRepo.save(project);
-      return true;
-
-    default:
-      console.warn(`Unknown analysis status: ${status}`);
-      return false;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error('Error handling webhook event:', error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
- }
- private async storeAnalysisResults(project: Project, authHeader: string) {
-  try {
-    const branchName = project.defaultBranch || 'main';
-    await this.sonarIssueRepo.delete({ project: { u_id: project.u_id } });
-    const metricsResponse = await fetch(
-      `${SONARQUBE_API_URL}/api/measures/component?component=${project.repoName}&branch=${branchName}&metricKeys=` +
-      'ncloc,ncloc_language_distribution,languages,files,coverage,duplicated_lines_density,' +
-      'violations,complexity,sqale_index,reliability_rating,security_rating,security_review_rating,' +
-      'sqale_debt_ratio,bugs,vulnerabilities,code_smells,new_technical_debt',
-      { headers: { Authorization: authHeader } }
-    );
 
-    if (!metricsResponse.ok) throw new Error(await metricsResponse.text());
-
-    const metricsData = await metricsResponse.json();
-    const measures = metricsData.component.measures || [];
-
-    const qualityGateResponse = await fetch(
-      `${SONARQUBE_API_URL}/api/qualitygates/project_status?projectKey=${project.repoName}&branch=${branchName}`,
-      { headers: { Authorization: authHeader } }
-    );
-
-    let qualityGateStatus = 'UNKNOWN';
-    if (qualityGateResponse.ok) {
-      const qualityGateData = await qualityGateResponse.json();
-      qualityGateStatus = qualityGateData.projectStatus.status;
+  private async storeAnalysisResults(project: Project, authHeader: string) {
+    if (!project.repoName) {
+        throw new Error("Project repository name is required");
     }
 
-    let page = 1;
-    let totalIssues = 0;
-    let fetchedIssues = 0;
-    const allIssues: SonarIssue[] = [];
+    const queryRunner = dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    do {
-      const issuesResponse = await fetch(
-        `${SONARQUBE_API_URL}/api/issues/search?componentKeys=${project.repoName}&branch=${branchName}&ps=500&p=${page}`,
-        { headers: { Authorization: authHeader } }
-      );
-
-      if (!issuesResponse.ok) {
-        throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
-      }
-
-      const issuesData = await issuesResponse.json();
-      totalIssues = issuesData.total || 0;
-      fetchedIssues += issuesData.issues?.length || 0;
-
-      if (issuesData.issues && issuesData.issues.length > 0) {
-        const transformedIssues = issuesData.issues.map((issue: any) => {
-          const newIssue = new SonarIssue();
-          newIssue.key = issue.key;
-          newIssue.type = issue.type;
-          newIssue.severity = issue.severity;
-          newIssue.message = issue.message;
-          newIssue.rule = issue.rule;
-          newIssue.component = issue.component;
-          newIssue.line = issue.line || 0;
-          newIssue.status = issue.status;
-          newIssue.resolution = issue.resolution;
-          newIssue.project = project;
-          return newIssue;
+    try {
+        // 1. Get the correct branch name - use project.defaultBranch or fall back to 'main'
+        let branchName = project.defaultBranch || 'main';
+        
+        // 2. Find the project in SonarQube
+        console.log(`Searching for project ${project.repoName} in SonarQube`);
+        const searchUrl = new URL(`${SONARQUBE_API_URL}/api/projects/search`);
+        searchUrl.searchParams.append('q', project.repoName);
+        
+        const searchResponse = await fetch(searchUrl.toString(), {
+            headers: { Authorization: authHeader }
         });
 
-        allIssues.push(...transformedIssues);
-      }
+        if (!searchResponse.ok) {
+            throw new Error(`Failed to search projects: ${await searchResponse.text()}`);
+        }
 
-      page++;
-    } while (fetchedIssues < totalIssues);
+        const searchData = await searchResponse.json();
+        const sonarProject = searchData.components.find(
+            (c: any) => c.key === project.repoName || c.name === project.repoName
+        );
 
-    if (allIssues.length > 0) {
-      await this.sonarIssueRepo.save(allIssues);
-      console.log(`Saved ${allIssues.length} issues to database`);
-    } else {
-      console.log('No issues found to save');
+        if (!sonarProject) {
+            throw new Error(`Project ${project.repoName} not found in SonarQube`);
+        }
+
+        const sonarProjectKey = sonarProject.key;
+        console.log(`Found SonarQube project: ${sonarProjectKey}`);
+
+        // 3. Verify the branch exists - with automatic fallback to 'main' if 'master' not found
+        console.log(`Checking if branch ${branchName} exists for project ${sonarProjectKey}`);
+        const branchUrl = new URL(`${SONARQUBE_API_URL}/api/project_branches/list`);
+        branchUrl.searchParams.append('project', sonarProjectKey);
+        
+        const branchResponse = await fetch(branchUrl.toString(), {
+            headers: { Authorization: authHeader }
+        });
+
+        if (branchResponse.ok) {
+            const branchData = await branchResponse.json();
+            const availableBranches = branchData.branches.map((b: any) => b.name);
+            
+            // If requested branch doesn't exist, try 'main' if we were looking for 'master'
+            if (!availableBranches.includes(branchName)) {
+                if (branchName === 'master' && availableBranches.includes('main')) {
+                    console.log(`Branch master not found, falling back to main`);
+                    branchName = 'main';
+                } else {
+                    throw new Error(`Branch ${branchName} not found. Available branches: ${availableBranches.join(', ')}`);
+                }
+            }
+        }
+
+        // 4. Delete existing data
+        console.log(`Deleting existing data for project ${sonarProjectKey}`);
+        await queryRunner.manager.delete(SonarIssue, { project: { u_id: project.u_id } });
+        await queryRunner.manager.delete(CodeMetrics, { 
+            project: { u_id: project.u_id },
+            branch: branchName 
+        });
+
+        // 5. Fetch metrics
+        console.log('Fetching metrics from SonarQube');
+        const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
+        metricsUrl.searchParams.append('component', sonarProjectKey);
+        metricsUrl.searchParams.append('branch', branchName);
+        metricsUrl.searchParams.append('metricKeys', [
+            'ncloc', 'files', 'coverage', 'duplicated_lines_density',
+            'violations', 'complexity', 'sqale_index', 'reliability_rating',
+            'security_rating', 'bugs', 'vulnerabilities', 'code_smells'
+        ].join(','));
+
+        const metricsResponse = await fetch(metricsUrl.toString(), {
+            headers: { Authorization: authHeader }
+        });
+
+        if (!metricsResponse.ok) {
+            throw new Error(`Metrics API failed: ${await metricsResponse.text()}`);
+        }
+
+        const metricsData = await metricsResponse.json();
+        const measures = metricsData.component?.measures || [];
+
+        // 6. Fetch quality gate status
+        console.log('Fetching quality gate status');
+        const qualityGateUrl = new URL(`${SONARQUBE_API_URL}/api/qualitygates/project_status`);
+        qualityGateUrl.searchParams.append('projectKey', sonarProjectKey);
+        qualityGateUrl.searchParams.append('branch', branchName);
+
+        let qualityGateStatus = 'UNKNOWN';
+        const qualityGateResponse = await fetch(qualityGateUrl.toString(), {
+            headers: { Authorization: authHeader }
+        });
+
+        if (qualityGateResponse.ok) {
+            const qualityGateData = await qualityGateResponse.json();
+            qualityGateStatus = qualityGateData.projectStatus.status;
+        }
+
+        // 7. Fetch issues
+        console.log('Fetching issues from SonarQube');
+        const allIssues: SonarIssue[] = [];
+        let page = 1;
+        let hasMoreIssues = true;
+
+        while (hasMoreIssues) {
+            const issuesUrl = new URL(`${SONARQUBE_API_URL}/api/issues/search`);
+            issuesUrl.searchParams.append('componentKeys', sonarProjectKey);
+            issuesUrl.searchParams.append('branch', branchName);
+            issuesUrl.searchParams.append('ps', '500');
+            issuesUrl.searchParams.append('p', page.toString());
+
+            const issuesResponse = await fetch(issuesUrl.toString(), {
+                headers: { Authorization: authHeader }
+            });
+
+            if (!issuesResponse.ok) {
+                throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
+            }
+
+            const issuesData = await issuesResponse.json();
+            const issues = issuesData.issues || [];
+
+            if (issues.length === 0) {
+                hasMoreIssues = false;
+            } else {
+                allIssues.push(...issues.map((issue: any) => {
+                    const newIssue = new SonarIssue();
+                    newIssue.key = issue.key;
+                    newIssue.type = issue.type;
+                    newIssue.severity = issue.severity;
+                    newIssue.message = issue.message;
+                    newIssue.rule = issue.rule;
+                    newIssue.component = issue.component;
+                    newIssue.line = issue.line || 0;
+                    newIssue.status = issue.status;
+                    newIssue.resolution = issue.resolution;
+                    newIssue.project = project;
+                    return newIssue;
+                }));
+                page++;
+            }
+        }
+
+        // 8. Save data
+        if (allIssues.length > 0) {
+            await queryRunner.manager.save(SonarIssue, allIssues);
+        }
+
+        const codeMetrics = new CodeMetrics();
+        codeMetrics.project = project;
+        codeMetrics.branch = branchName;
+        codeMetrics.qualityGateStatus = qualityGateStatus;
+        codeMetrics.language = this.detectLanguage(measures);
+
+        measures.forEach((measure: any) => {
+            const value = parseFloat(measure.value);
+            switch (measure.metric) {
+                case "ncloc": codeMetrics.linesOfCode = value || 0; break;
+                case "files": codeMetrics.filesCount = value || 0; break;
+                case "coverage": codeMetrics.coverage = value || 0; break;
+                case "duplicated_lines_density": codeMetrics.duplicatedLines = value || 0; break;
+                case "violations": codeMetrics.violations = value || 0; break;
+                case "complexity": codeMetrics.complexity = value || 0; break;
+                case "sqale_index": codeMetrics.technicalDebt = value || 0; break;
+                case "reliability_rating": codeMetrics.reliabilityRating = value || 0; break;
+                case "security_rating": codeMetrics.securityRating = value || 0; break;
+                case "bugs": codeMetrics.bugs = value || 0; break;
+                case "vulnerabilities": codeMetrics.vulnerabilities = value || 0; break;
+                case "code_smells": codeMetrics.codeSmells = value || 0; break;
+            }
+        });
+
+        await queryRunner.manager.save(CodeMetrics, codeMetrics);
+        project.lastAnalysisDate = new Date();
+        await queryRunner.manager.save(Project, project);
+        await queryRunner.commitTransaction();
+
+        console.log(`Successfully stored analysis results for project ${sonarProjectKey}`);
+
+    } catch (error) {
+        await queryRunner.rollbackTransaction();
+        console.error('Error storing analysis results:', error);
+        throw error;
+    } finally {
+        await queryRunner.release();
     }
-
-    let codeMetrics = await this.metricsRepo.findOne({ 
-      where: { 
-        project: { u_id: project.u_id },
-        branch: branchName
-      }
-    });
-
-    if (!codeMetrics) {
-      codeMetrics = new CodeMetrics();
-      codeMetrics.project = project;
-      codeMetrics.branch = branchName;
-    }
-
-    // Update all metrics
-    measures.forEach((measure: any) => {
-      switch (measure.metric) {
-        case "ncloc":
-          codeMetrics.linesOfCode = parseInt(measure.value) || 0;
-          break;
-        case "files":
-          codeMetrics.filesCount = parseInt(measure.value) || 0;
-          break;
-        case "coverage":
-          codeMetrics.coverage = parseFloat(measure.value) || 0;
-          break;
-        case "duplicated_lines_density":
-          codeMetrics.duplicatedLines = parseFloat(measure.value) || 0;
-          break;
-        case "violations":
-          codeMetrics.violations = parseInt(measure.value) || 0;
-          break;
-        case "complexity":
-          codeMetrics.complexity = parseInt(measure.value) || 0;
-          break;
-        case "sqale_index":
-          codeMetrics.technicalDebt = parseInt(measure.value) || 0;
-          break;
-        case "reliability_rating":
-          codeMetrics.reliabilityRating = parseFloat(measure.value) || 0;
-          break;
-        case "security_rating":
-          codeMetrics.securityRating = parseFloat(measure.value) || 0;
-          break;
-        case "bugs":
-          codeMetrics.bugs = parseInt(measure.value) || 0;
-          break;
-        case "vulnerabilities":
-          codeMetrics.vulnerabilities = parseInt(measure.value) || 0;
-          break;
-        case "code_smells":
-          codeMetrics.codeSmells = parseInt(measure.value) || 0;
-          break;
-        case "sqale_debt_ratio":
-          codeMetrics.debtRatio = parseFloat(measure.value) || 0;
-          break;
-      }
-    });
-
-    // Store quality gate status
-    codeMetrics.qualityGateStatus = qualityGateStatus;
-
-    // Detect primary language
-    codeMetrics.language = this.detectLanguage(measures);
-
-    await this.metricsRepo.save(codeMetrics);
-    await this.projectRepo.save(project);
-
-    console.log(`Successfully stored ${allIssues.length} issues for project ${project.repoName}`);
-
-  } catch (error) {
-    console.error(`[storeAnalysisResults] Error storing results:`, error);
-    throw error;
   }
-}
 
-
-private parseLanguageDistribution(distribution: string): Record<string, number> {
-  const result: Record<string, number> = {};
-  if (!distribution) return result;
-  
-  // Handle both formats: "java=123;js=45" and "java=123,js=45"
-  const items = distribution.split(/[;,]/).filter(item => item.includes('='));
-  
-  items.forEach(item => {
-    const [lang, lines] = item.split('=');
-    if (lang && lines && !isNaN(Number(lines))) {
-      result[lang.trim()] = parseInt(lines);
+  private detectLanguage(measures: any[]): string {
+    const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");
+    if (languageMeasure) {
+        const distribution = this.parseLanguageDistribution(languageMeasure.value);
+        return Object.keys(distribution)[0] || "unknown";
     }
-  });
-  return Object.fromEntries(
-    Object.entries(result).sort(([,a], [,b]) => b - a)
-  );
-}
-
-private detectLanguage(measures: any[]): string {
-  const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");
-  if (languageMeasure) {
-    const distribution = this.parseLanguageDistribution(languageMeasure.value);
-    return Object.keys(distribution)[0] || "unknown";
+    return "unknown";
   }
-  return "unknown";
- }
+
+  private parseLanguageDistribution(distribution: string): Record<string, number> {
+    const result: Record<string, number> = {};
+    if (!distribution) return result;
+    
+    const items = distribution.split(/[;,]/).filter(item => item.includes('='));
+    
+    items.forEach(item => {
+        const [lang, lines] = item.split('=');
+        if (lang && lines && !isNaN(Number(lines))) {
+            result[lang.trim()] = parseInt(lines);
+        }
+    });
+    
+    return Object.fromEntries(
+        Object.entries(result).sort(([,a], [,b]) => b - a)
+    );
+  }
 }
