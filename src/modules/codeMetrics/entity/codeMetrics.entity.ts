@@ -51,28 +51,36 @@ export class CodeMetrics {
   @Field({ nullable: true })
   complexity!: number;
 
+
   @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
   technicalDebt?: number;
-
+  
+  @Field({nullable: true })
   @Column({ type: 'float', nullable: true })
   reliabilityRating!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'float', nullable: true })
   securityRating!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'int', nullable: true })
   bugs!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'int', nullable: true })
   vulnerabilities!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'int', nullable: true })
   codeSmells!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'float', nullable: true })
   debtRatio!: number;
   
+  @Field({ nullable: true })
   @Column({ type: 'varchar', nullable: true })
   qualityGateStatus!: string;
 

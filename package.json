@@ -5,6 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node ./src/index.ts",
+    "build": "tsc",  
     "start:local": "cross-env NODE_ENV=dev npm run db:migrate && cross-env NODE_ENV=dev ts-node ./src/index.ts --watch",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js --d ./src/database/data-source.ts",
     "typeorm-test": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js --d ./src/test-database/testdbconfig.ts",

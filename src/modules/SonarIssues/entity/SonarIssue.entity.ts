@@ -25,7 +25,11 @@ export class SonarIssue {
     })
     @Field(() => Project)
     project!: Project;
-
+    
+    @Column({ default: "main" })
+    @Field()
+    branch!: string;
+    
     @Column()
     @Field()
     type!: string; 
