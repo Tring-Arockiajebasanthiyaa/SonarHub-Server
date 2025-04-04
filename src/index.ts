@@ -20,7 +20,7 @@ async function startServer() {
   console.log("Data Source has been initialized!");
 
   const app = express();
-
+  app.disable("x-powered-by");
   app.use(
     cors({
       origin: process.env.FRONTEND_URL,
@@ -36,7 +36,7 @@ async function startServer() {
       secret: process.env.SESSION_SECRET!,
       resave: false,
       saveUninitialized: true,
-      cookie: { secure: false, httpOnly: true,sameSite: "lax" }
+      cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true,sameSite: "lax" }
     })
   );
   app.use(passport.initialize());

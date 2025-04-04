@@ -2,5 +2,5 @@ projectKey=sonarhub-backend
 serverUrl=http://quality.tringbytes.com
 serverVersion=9.9.8.100196
 dashboardUrl=http://quality.tringbytes.com/dashboard?id=sonarhub-backend
-ceTaskId=AZX2kFNOPemNd4lE79Kv
-ceTaskUrl=http://quality.tringbytes.com/api/ce/task?id=AZX2kFNOPemNd4lE79Kv
+ceTaskId=AZX_vxxsjd_aaggwFFTi
+ceTaskUrl=http://quality.tringbytes.com/api/ce/task?id=AZX_vxxsjd_aaggwFFTi

@@ -23,15 +23,32 @@ dotenv.config();
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
 const SONARQUBE_API_TOKEN = process.env.SONARQUBE_API_TOKEN;
 const GITHUB_API_URL = process.env.GITHUB_API;
-
+enum LanguageBytesPerLine {
+  JavaScript = 20,
+  TypeScript = 20,
+  Java = 15,
+  Python = 10,
+  Ruby = 10,
+  PHP = 15,
+  "C++" = 15,
+  C = 15,
+  Go = 15,
+  Swift = 15,
+  Kotlin = 15,
+  HTML = 30,
+  CSS = 25,
+  SCSS = 25,
+  JSON = 40,
+  Default = 20,
+}
 @Resolver()
 export class SonarQubeResolver {
-  private projectRepo = dataSource.getRepository(Project);
-  private userRepo = dataSource.getRepository(User);
-  private metricsRepo = dataSource.getRepository(CodeMetrics);
-  private issuesRepo = dataSource.getRepository(SonarIssue);
-  private branchRepo = dataSource.getRepository(Branch);
-
+  private readonly projectRepo = dataSource.getRepository(Project);
+  private readonly userRepo = dataSource.getRepository(User);
+  private readonly metricsRepo = dataSource.getRepository(CodeMetrics);
+  private readonly issuesRepo = dataSource.getRepository(SonarIssue);
+  // private readonly branchRepo = dataSource.getRepository(Branch);
+  
   @Query(() => ProjectAnalysisResult)
   async getProjectAnalysis(
     @Arg("githubUsername") githubUsername: string,
@@ -58,8 +75,6 @@ export class SonarQubeResolver {
       if (!user || !user.githubAccessToken) {
         throw new Error(`GitHub access token not found for user ${githubUsername}`);
       }
-
-      // Get repository details and branches
       const repoDetails = await axios.get(
         `https://api.github.com/repos/${githubUsername}/${repoName.trim()}`,
         {
@@ -110,7 +125,7 @@ export class SonarQubeResolver {
         }),
         this.getLinesOfCodeReport(githubUsername, repoName.trim(), branch || defaultBranch),
       ]);
-
+      console.log(project,codeMetrics,sonarIssues,branches,"REsponses");
       return {
         project,
         branches,
@@ -460,11 +475,9 @@ export class SonarQubeResolver {
             throw new Error(`GitHub access token not found for user ${project.username}`);
         }
 
-        // 1. First ensure the project exists in SonarQube
         await this.ensureSonarQubeProject(project, authHeader);
         await this.updateProjectSettings(project, authHeader, user.githubAccessToken);
 
-        // 2. Get branches from GitHub
         const branchesResponse = await fetch(
             `${GITHUB_API_URL}/repos/${project.username}/${project.title}/branches`,
             {
@@ -485,31 +498,24 @@ export class SonarQubeResolver {
             return false;
         }
 
-        // 3. Process each branch sequentially
         for (const branch of branches) {
             let repoPath: string | null = null;
             try {
                 console.log(`Processing branch: ${branch.name}`);
                 
-                // Clone the repository
                 repoPath = await this.cloneRepository(project.githubUrl, branch.name);
                 
-                // Create sonar-project.properties file
                 this.createSonarPropertiesFile(repoPath, project.repoName, project.title, branch.name);
 
-                // Run SonarScanner
                 await this.runSonarScanner(repoPath, branch.name);
                 
-                // Wait for analysis to complete
-                await this.waitForProjectAnalysis(project, authHeader, branch.name);
+                //await this.waitForProjectAnalysis(project, authHeader, branch.name);
                 
-                // Store analysis results
                 await this.storeAnalysisResults(project, branch.name, authHeader);
                 
                 console.log(`Successfully analyzed and stored results for branch: ${branch.name}`);
             } catch (branchError) {
                 console.error(`Error processing branch ${branch.name}:`, branchError);
-                // Mark project as failed if any branch fails
                 project.result = "Analysis failed";
                 await this.projectRepo.save(project);
             } finally {
@@ -525,13 +531,12 @@ export class SonarQubeResolver {
 }
 
 private async waitForProjectAnalysis(project: Project, authHeader: string, branch: string) {
-    const maxAttempts = 30; // 30 attempts with 10s delay = 5 minutes max
+    const maxAttempts = 30; 
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     const projectKey = project.repoName;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            // Check if analysis is complete
             const statusUrl = `${SONARQUBE_API_URL}/api/ce/component?component=${encodeURIComponent(projectKey)}&branch=${branch}`;
             const statusResponse = await fetch(statusUrl, {
                 headers: { Authorization: authHeader }
@@ -574,14 +579,12 @@ private async waitForProjectAnalysis(project: Project, authHeader: string, branc
     const fs = require('fs');
     const os = require('os');
     const path = require('path');
-    const { execSync } = require('child_process');
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonar-'));
     const normalizedTempDir = path.normalize(tempDir);
     const repoPath = path.join(normalizedTempDir, `repo-${branch.replace(/[^a-zA-Z0-9_-]/g, '_')}`);
-    execSync(`git clone -b "${branch}" --single-branch "${githubUrl}" "${repoPath}"`, { 
-        stdio: 'inherit',
-        windowsHide: true
-    });
+    const { execFileSync } = require("child_process");
+
+    execFileSync("git", ["clone", "-b", branch, "--single-branch", githubUrl, repoPath], { stdio: "inherit" });
 
     return repoPath;
   }
@@ -782,7 +785,7 @@ private async waitForProjectAnalysis(project: Project, authHeader: string, branc
    }
 
 
-  private async getRepositoryLinesOfCode(
+   private async getRepositoryLinesOfCode(
     user: User,
     repo: any
   ): Promise<{ totalLines: number; languages: Record<string, number> }> {
@@ -790,10 +793,10 @@ private async waitForProjectAnalysis(project: Project, authHeader: string, branc
       const response = await fetch(
         `${GITHUB_API_URL}/repos/${user.username}/${repo.name}/languages`,
         {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json"
-          }
+            Accept: "application/vnd.github.v3+json",
+          },
         }
       );
   
@@ -802,32 +805,16 @@ private async waitForProjectAnalysis(project: Project, authHeader: string, branc
       const languagesData = await response.json();
       let totalLines = 0;
       const languages: Record<string, number> = {};
-      
-      const bytesPerLine: Record<string, number> = {
-        'JavaScript': 20,
-        'TypeScript': 20,
-        'Java': 15,
-        'Python': 10,
-        'Ruby': 10,
-        'PHP': 15,
-        'C++': 15,
-        'C': 15,
-        'Go': 15,
-        'Swift': 15,
-        'Kotlin': 15,
-        'HTML': 30,
-        'CSS': 25,
-        'SCSS': 25,
-        'JSON': 40
-      };
-
+  
       for (const [language, bytes] of Object.entries(languagesData)) {
-        const avgBytesPerLine = bytesPerLine[language] || 20;
+        const avgBytesPerLine =
+          LanguageBytesPerLine[language as keyof typeof LanguageBytesPerLine] ||
+          LanguageBytesPerLine.Default;
         const lines = Math.floor(Number(bytes) / avgBytesPerLine);
         languages[language] = Math.round(lines);
         totalLines += lines;
       }
-
+  
       return { totalLines: Math.round(totalLines), languages };
     } catch (error) {
       return { totalLines: 0, languages: {} };
@@ -1288,12 +1275,11 @@ private async waitForProjectAnalysis(project: Project, authHeader: string, branc
     items.forEach(item => {
       const [lang, lines] = item.split('=');
       if (lang && lines && !isNaN(Number(lines))) {
-        // Standardize language names
         const normalizedLang = lang.trim();
         result[normalizedLang] = parseInt(lines, 10);
       }
     });
-    
+    console.log("LAnguages",Object.entries);
     return Object.fromEntries(
       Object.entries(result).sort((a, b) => b[1] - a[1])
     );
