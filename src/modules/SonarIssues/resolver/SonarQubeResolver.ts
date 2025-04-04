@@ -7,7 +7,6 @@ import dataSource from "../../../database/data-source";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
 import { AnalysisResult } from "../graphql/types/AnalysisResult";
-
 import { LocReport } from "../graphql/types/LocReport";
 import { Branch } from "../../branch/entity/branch.entity";
 import { Repo } from "../../GitHubRepository/entity/repo.entity";
@@ -34,49 +33,35 @@ export class SonarQubeResolver {
   private branchRepo = dataSource.getRepository(Branch);
 
   @Query(() => ProjectAnalysisResult)
-async getProjectAnalysis(
-  @Arg("githubUsername") githubUsername: string,
-  @Arg("repoName") repoName: string,
-  @Arg("branch", { nullable: true }) branch?: string
-) {
-  try {
-    // Create consistent project key
-    const projectKey = `${githubUsername}_${repoName.trim()}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-    
-    const project = await this.projectRepo.findOne({
-      where: { repoName: projectKey, user: { username: githubUsername } },
-      relations: ["user"],
-    });
-
-    if (!project) {
-      throw new Error(`Project '${repoName}' not found in the database.`);
-    }
-
-    const user = await this.userRepo.findOne({ 
-      where: { username: githubUsername },
-      select: ["u_id", "githubAccessToken"]
-    });
-
-    if (!user || !user.githubAccessToken) {
-      throw new Error(`GitHub access token not found for user ${githubUsername}`);
-    }
-
-    const repoDetails = await axios.get(
-      `https://api.github.com/repos/${githubUsername}/${repoName.trim()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      }
-    );
-
-    const defaultBranch = repoDetails.data.default_branch || "main";
-    let branches = [];
-
+  async getProjectAnalysis(
+    @Arg("githubUsername") githubUsername: string,
+    @Arg("repoName") repoName: string,
+    @Arg("branch", { nullable: true }) branch?: string
+  ) {
     try {
-      const branchResponse = await axios.get(
-        `https://api.github.com/repos/${githubUsername}/${repoName.trim()}/branches`,
+      const projectKey = `${githubUsername}_${repoName.trim()}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      
+      const project = await this.projectRepo.findOne({
+        where: { repoName: projectKey, user: { username: githubUsername } },
+        relations: ["user"],
+      });
+
+      if (!project) {
+        throw new Error(`Project '${repoName}' not found in the database.`);
+      }
+
+      const user = await this.userRepo.findOne({ 
+        where: { username: githubUsername },
+        select: ["u_id", "githubAccessToken"]
+      });
+
+      if (!user || !user.githubAccessToken) {
+        throw new Error(`GitHub access token not found for user ${githubUsername}`);
+      }
+
+      // Get repository details and branches
+      const repoDetails = await axios.get(
+        `https://api.github.com/repos/${githubUsername}/${repoName.trim()}`,
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
@@ -84,48 +69,64 @@ async getProjectAnalysis(
           },
         }
       );
-      branches = branchResponse.data.map((b: any) => ({
-        name: b.name,
-        dashboardUrl: b._links.html,
-      }));
-    } catch {
-      branches = [{ name: defaultBranch, dashboardUrl: "" }];
-    }
 
-    // Validate branch exists
-    if (branch && !branches.some((b: any) => b.name === branch)) {
-      branch = defaultBranch;
-    }
+      const defaultBranch = repoDetails.data.default_branch || "main";
+      let branches = [];
 
-    const [codeMetrics, sonarIssues, locReport] = await Promise.all([
-      this.metricsRepo.find({
-        where: branch
-          ? { project: { repoName: projectKey }, branch }
-          : { project: { repoName: projectKey } },
-      }),
-      this.issuesRepo.find({
-        where: branch
-          ? { project: { repoName: projectKey }, branch }
-          : { project: { repoName: projectKey } },
-      }),
-      this.getLinesOfCodeReport(githubUsername, repoName.trim()),
-    ]);
-    console.log(project,branches,codeMetrics,sonarIssues,"Responses")
-    return {
-      project,
-      branches,
-      codeMetrics,
-      sonarIssues,
-      locReport,
-    };
-  } catch (error) {
-    console.error("Error in getProjectAnalysis:", error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to analyze project: ${error.message}`);
+      try {
+        const branchResponse = await axios.get(
+          `https://api.github.com/repos/${githubUsername}/${repoName.trim()}/branches`,
+          {
+            headers: {
+              Authorization: `Bearer ${user.githubAccessToken}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+          }
+        );
+        branches = branchResponse.data.map((b: any) => ({
+          name: b.name,
+          dashboardUrl: b._links.html,
+        }));
+      } catch {
+        branches = [{ name: defaultBranch, dashboardUrl: "" }];
+      }
+
+      // Validate branch exists
+      if (branch && !branches.some((b: any) => b.name === branch)) {
+        branch = defaultBranch;
+      }
+
+      // Get branch-specific data
+      const [codeMetrics, sonarIssues, locReport] = await Promise.all([
+        this.metricsRepo.find({
+          where: branch
+            ? { project: { repoName: projectKey }, branch }
+            : { project: { repoName: projectKey } },
+        }),
+        this.issuesRepo.find({
+          where: branch
+            ? { project: { repoName: projectKey }, branch }
+            : { project: { repoName: projectKey } },
+        }),
+        this.getLinesOfCodeReport(githubUsername, repoName.trim(), branch || defaultBranch),
+      ]);
+
+      return {
+        project,
+        branches,
+        codeMetrics,
+        sonarIssues,
+        locReport,
+      };
+    } catch (error) {
+      console.error("Error in getProjectAnalysis:", error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to analyze project: ${error.message}`);
+      }
+      throw new Error("Failed to analyze project due to an unknown error.");
     }
-    throw new Error("Failed to analyze project due to an unknown error.");
   }
- }
+
   
   @Query(() => [Branch])
   async getRepoBranches(
@@ -459,16 +460,11 @@ async getProjectAnalysis(
             throw new Error(`GitHub access token not found for user ${project.username}`);
         }
 
-        // Ensure SonarQube project exists and is configured
+        // 1. First ensure the project exists in SonarQube
         await this.ensureSonarQubeProject(project, authHeader);
         await this.updateProjectSettings(project, authHeader, user.githubAccessToken);
-        const rateLimitResponse = await fetch(`${GITHUB_API_URL}/rate_limit`, {
-          headers: { Authorization: `Bearer ${user.githubAccessToken}` }
-      });
-      const rateLimitData = await rateLimitResponse.json();
-      console.log("GitHub API Rate Limit:", rateLimitData.rate);
-      
-        // Get all branches from GitHub
+
+        // 2. Get branches from GitHub
         const branchesResponse = await fetch(
             `${GITHUB_API_URL}/repos/${project.username}/${project.title}/branches`,
             {
@@ -488,37 +484,92 @@ async getProjectAnalysis(
         if (branches.length === 0) {
             return false;
         }
-// Process each branch sequentially
-for (const branch of branches) {
-  let repoPath: string | null = null;
-  try {
-      console.log(`Processing branch: ${branch.name}`);
-      
-      repoPath = await this.cloneRepository(project.githubUrl, branch.name);
-      this.createSonarPropertiesFile(repoPath, project.repoName, project.title, branch.name);
 
-      await this.runSonarScanner(repoPath, branch.name);
-      
-      // await this.waitForProjectAnalysis(project, authHeader, branch.name);
-      
-      // Store successful analysis immediately
-      const dashboardUrl = `${SONARQUBE_API_URL}/dashboard?id=${encodeURIComponent(project.repoName)}&branch=${branch.name}`;
-      await this.storeBranchAnalysis(project.repoName, project.username, branch.name, dashboardUrl);
-      
-      console.log(`Successfully analyzed and stored results for branch: ${branch.name}`);
-  } catch (branchError) {
-      console.error(`Error processing branch ${branch.name}:`, branchError);
-  } finally {
-      if (repoPath) {
-          await this.cleanupRepository(repoPath);
-      }
-    }
-   }
+        // 3. Process each branch sequentially
+        for (const branch of branches) {
+            let repoPath: string | null = null;
+            try {
+                console.log(`Processing branch: ${branch.name}`);
+                
+                // Clone the repository
+                repoPath = await this.cloneRepository(project.githubUrl, branch.name);
+                
+                // Create sonar-project.properties file
+                this.createSonarPropertiesFile(repoPath, project.repoName, project.title, branch.name);
+
+                // Run SonarScanner
+                await this.runSonarScanner(repoPath, branch.name);
+                
+                // Wait for analysis to complete
+                await this.waitForProjectAnalysis(project, authHeader, branch.name);
+                
+                // Store analysis results
+                await this.storeAnalysisResults(project, branch.name, authHeader);
+                
+                console.log(`Successfully analyzed and stored results for branch: ${branch.name}`);
+            } catch (branchError) {
+                console.error(`Error processing branch ${branch.name}:`, branchError);
+                // Mark project as failed if any branch fails
+                project.result = "Analysis failed";
+                await this.projectRepo.save(project);
+            } finally {
+                if (repoPath) {
+                    await this.cleanupRepository(repoPath);
+                }
+            }
+        }
         return true;
     } catch (error) {
         throw new Error(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+}
+
+private async waitForProjectAnalysis(project: Project, authHeader: string, branch: string) {
+    const maxAttempts = 30; // 30 attempts with 10s delay = 5 minutes max
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const projectKey = project.repoName;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            // Check if analysis is complete
+            const statusUrl = `${SONARQUBE_API_URL}/api/ce/component?component=${encodeURIComponent(projectKey)}&branch=${branch}`;
+            const statusResponse = await fetch(statusUrl, {
+                headers: { Authorization: authHeader }
+            });
+
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                if (statusData.current && statusData.current.status === 'SUCCESS') {
+                    console.log(`Analysis completed for branch ${branch}`);
+                    return;
+                }
+                if (statusData.current && statusData.current.status === 'FAILED') {
+                    throw new Error(`Analysis failed for branch ${branch}`);
+                }
+            }
+
+            // Check if component exists
+            const componentUrl = `${SONARQUBE_API_URL}/api/components/show?component=${encodeURIComponent(projectKey)}&branch=${branch}`;
+            const componentResponse = await fetch(componentUrl, {
+                headers: { Authorization: authHeader }
+            });
+
+            if (componentResponse.ok) {
+                console.log(`Component found for branch ${branch}`);
+                return;
+            }
+
+            console.log(`Waiting for analysis to complete (Attempt ${attempt}/${maxAttempts})...`);
+            await delay(10000); // Wait 10 seconds before retrying
+        } catch (error) {
+            console.error(`Error while waiting for analysis: ${error}`);
+            await delay(10000);
+        }
+    }
+
+    throw new Error(`Analysis timeout for branch ${branch}`);
   }
+
   private async cloneRepository(githubUrl: string, branch: string): Promise<string> {
     const fs = require('fs');
     const os = require('os');
@@ -730,31 +781,6 @@ for (const branch of branches) {
     }
    }
 
-   private async waitForProjectAnalysis(project: Project, authHeader: string, branch: string) {
-    let attempts = 0;
-    const maxAttempts = 100;
-    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-    while (attempts < maxAttempts) {
-        attempts++;
-        const response = await fetch(`${SONARQUBE_API_URL}/api/qualitygates/project_status?projectKey=${project.repoName}&branch=${branch}`, {
-            headers: { Authorization: authHeader }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            if (data.status !== 'IN_PROGRESS') {
-                console.log(`SonarQube analysis completed for branch ${branch}`);
-                return;
-            }
-        }
-
-        console.log(`Waiting for SonarQube analysis for branch ${branch} (Attempt ${attempts}/${maxAttempts})...`);
-        await delay(10000); // Wait 10 seconds before retrying
-    }
-
-    throw new Error(`SonarQube analysis timeout for branch ${branch}`);
-}
 
   private async getRepositoryLinesOfCode(
     user: User,
@@ -836,7 +862,8 @@ for (const branch of branches) {
       if (status === 'SUCCESS') {
         project.result = 'Analysis completed';
         await queryRunner.manager.save(project);
-        await this.storeAnalysisResults(project, authHeader);
+        const branchName = project.defaultBranch || 'main';
+        await this.storeAnalysisResults(project, branchName, authHeader);
       } else if (status === 'FAILED') {
         project.result = 'Analysis failed';
         await queryRunner.manager.save(project);
@@ -852,93 +879,63 @@ for (const branch of branches) {
     }
   }
 
-  private async storeAnalysisResults(project: Project, authHeader: string) {
-    if (!project.repoName) {
-        throw new Error("Project repository name is required");
-    }
-
+  private async storeAnalysisResults(
+    project: Project, 
+    branchName: string, 
+    authHeader: string
+  ) {
     const queryRunner = dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-        const currentProject = await queryRunner.manager.findOne(Project, {
-            where: { u_id: project.u_id },
-            relations: ["codeMetrics", "sonarIssues", "user"]
-        });
-        
-        if (!currentProject) {
-            throw new Error("Project not found in database");
-        }
+      const projectKey = project.repoName;
+      
+      // Fetch metrics and issues from SonarQube
+      const { measures, qualityGateStatus } = await this.fetchBranchMetricsWithLanguages(
+        projectKey,
+        branchName,
+        authHeader
+      );
 
-        const repoRepo = queryRunner.manager.getRepository(Repo);
-        let repo = await repoRepo.findOne({ 
-            where: { name: project.repoName },
-            relations: ["owner"]
-        });
+      const branchIssues = await this.fetchBranchIssues(
+        projectKey,
+        branchName,
+        project,
+        authHeader
+      );
 
-        if (!repo) {
-            repo = repoRepo.create({
-                name: project.repoName,
-                owner: currentProject.user,
-                language: '',
-                stars: 0,
-                totalCommits: 0
-            });
-            await queryRunner.manager.save(repo);
-        }
+      // Create and save metrics
+      const codeMetrics = this.createBranchMetrics(
+        project,
+        branchName,
+        measures,
+        qualityGateStatus
+      );
 
-        const sonarProject = await this.findSonarQubeProject(project.repoName, authHeader);
-        const sonarProjectKey = sonarProject.key;
+      // Save in transaction
+      await queryRunner.manager.save(CodeMetrics, codeMetrics);
+      if (branchIssues.length > 0) {
+        await queryRunner.manager.save(SonarIssue, branchIssues);
+      }
 
-        const branches = await this.getProjectBranches(sonarProjectKey, authHeader);
-        
-        for (const branchName of branches) {
-            await this.cleanBranchData(queryRunner, project.u_id, branchName);
+      // Store dashboard URL
+      const dashboardUrl = `${SONARQUBE_API_URL}/dashboard?id=${encodeURIComponent(projectKey)}&branch=${branchName}`;
+      await this.storeBranchAnalysisInTransaction(
+        queryRunner,
+        projectKey,
+        project.username,
+        branchName,
+        dashboardUrl,
+        project.u_id // Ensure this matches the expected type in the called method
+      );
 
-            const { measures, qualityGateStatus } = await this.fetchBranchMetricsWithLanguages(
-                sonarProjectKey, 
-                branchName, 
-                authHeader
-            );
-
-            const branchIssues = await this.fetchBranchIssues(
-                sonarProjectKey, 
-                branchName, 
-                currentProject, 
-                authHeader
-            );
-            
-            const codeMetrics = this.createBranchMetrics(
-                currentProject, 
-                branchName, 
-                measures, 
-                qualityGateStatus
-            );
-
-            if (branchIssues.length > 0) {
-                await queryRunner.manager.save(SonarIssue, branchIssues);
-            }
-            await queryRunner.manager.save(CodeMetrics, codeMetrics);
-
-            const dashboardUrl = `${SONARQUBE_API_URL}/dashboard?id=${encodeURIComponent(project.repoName)}&branch=${branchName}`;
-            await this.storeBranchAnalysisInTransaction(queryRunner, project.repoName, project.username, branchName, dashboardUrl, repo.id);
-
-            if (branchName === currentProject.defaultBranch) {
-                const languageDistribution = this.extractLanguageDistribution(measures);
-                currentProject.languageDistribution = languageDistribution;
-            }
-        }
-
-        currentProject.lastAnalysisDate = new Date();
-        await queryRunner.manager.save(Project, currentProject);
-        await queryRunner.commitTransaction();
-
+      await queryRunner.commitTransaction();
     } catch (error) {
-        await queryRunner.rollbackTransaction();
-        throw error;
+      await queryRunner.rollbackTransaction();
+      throw error;
     } finally {
-        await queryRunner.release();
+      await queryRunner.release();
     }
   }
 
@@ -948,28 +945,28 @@ for (const branch of branches) {
     username: string,
     branchName: string,
     dashboardUrl: string,
-    repoId: number
+    repoId: string 
   ) {
     const branchRepo = queryRunner.manager.getRepository(Branch);
     
     let branch = await branchRepo.findOne({ 
-        where: { repoName, username, name: branchName } 
+      where: { repoName, username, name: branchName } 
     });
 
     if (!branch) {
-        branch = branchRepo.create({ 
-            repoId,
-            repoName, 
-            username, 
-            name: branchName, 
-            dashboardUrl
-        });
+      branch = branchRepo.create({ 
+        repoName, 
+        username, 
+        name: branchName, 
+        dashboardUrl
+      });
     } else {
-        branch.dashboardUrl = dashboardUrl;
+      branch.dashboardUrl = dashboardUrl;
     }
 
     await branchRepo.save(branch);
   }
+
 
   private async fetchBranchMetricsWithLanguages(projectKey: string, branchName: string, authHeader: string) {
     const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
@@ -1227,41 +1224,44 @@ for (const branch of branches) {
 
   private async getLinesOfCodeReport(
     githubUsername: string,
-    repoName: string
+    repoName: string,
+    branch: string
   ): Promise<LocReport> {
     try {
       const projectKey = `${githubUsername}_${repoName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const authHeader = `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`;
       
-      const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
-      metricsUrl.searchParams.append('component', projectKey);
-      metricsUrl.searchParams.append('metricKeys', 'ncloc,ncloc_language_distribution');
+      const url = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
+      url.searchParams.append('component', projectKey);
+      url.searchParams.append('branch', branch);
+      url.searchParams.append('metricKeys', 'ncloc,ncloc_language_distribution');
       
-      const response = await fetch(metricsUrl.toString(), {
+      const response = await fetch(url.toString(), {
         headers: { Authorization: authHeader }
       });
-  
+
       if (!response.ok) {
         throw new Error(`Failed to fetch lines of code: ${await response.text()}`);
       }
-  
+
       const data = await response.json();
-      const measures = data.component.measures || [];
+      const measures = data.component?.measures || [];
       
       let totalLines = 0;
       let sonarQubeLines = 0;
       let languageDistribution: Record<string, number> = {};
-  
+
       measures.forEach((measure: any) => {
         if (measure.metric === 'ncloc') {
           sonarQubeLines = parseInt(measure.value);
+          totalLines = sonarQubeLines;
         }
         if (measure.metric === 'ncloc_language_distribution') {
           languageDistribution = this.parseLanguageDistribution(measure.value);
-          totalLines = Object.values(languageDistribution).reduce((sum, val) => sum + val, 0);
+          totalLines = Object.values(languageDistribution).reduce((sum, val) => sum + val, 0) || totalLines;
         }
       });
-  
+
       return {
         totalLines,
         sonarQubeLines,
@@ -1269,6 +1269,7 @@ for (const branch of branches) {
         lastUpdated: new Date(),
       };
     } catch (error) {
+      console.error('Error in getLinesOfCodeReport:', error);
       return {
         totalLines: 0,
         sonarQubeLines: 0,
@@ -1277,7 +1278,7 @@ for (const branch of branches) {
       };
     }
   }
-  
+
   private parseLanguageDistribution(distribution: string): Record<string, number> {
     const result: Record<string, number> = {};
     if (!distribution) return result;
@@ -1287,10 +1288,15 @@ for (const branch of branches) {
     items.forEach(item => {
       const [lang, lines] = item.split('=');
       if (lang && lines && !isNaN(Number(lines))) {
-        result[lang.trim()] = parseInt(lines);
+        // Standardize language names
+        const normalizedLang = lang.trim();
+        result[normalizedLang] = parseInt(lines, 10);
       }
     });
     
-    return result;
+    return Object.fromEntries(
+      Object.entries(result).sort((a, b) => b[1] - a[1])
+    );
   }
+
 } 
