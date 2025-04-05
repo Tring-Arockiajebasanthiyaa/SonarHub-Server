@@ -113,7 +113,7 @@ async getProjectAnalysis(
     username: githubUsername,
   },
   select: ['name', 'dashboardUrl'],
-});
+  });
 
     } catch {
       branches = [{ name: defaultBranch, dashboardUrl: "" }];
