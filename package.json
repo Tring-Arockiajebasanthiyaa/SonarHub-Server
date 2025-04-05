@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node ./src/index.ts",
-    "build": "tsc",  
+    "build": "tsc",
     "start:local": "cross-env NODE_ENV=dev npm run db:migrate && cross-env NODE_ENV=dev ts-node ./src/index.ts --watch",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js --d ./src/database/data-source.ts",
     "typeorm-test": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js --d ./src/test-database/testdbconfig.ts",
@@ -61,6 +61,7 @@
     "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",
     "@types/express-session": "^1.18.1",
+    "@types/fs-extra": "^11.0.4",
     "@types/graphql-type-json": "^0.3.5",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node-cron": "^3.0.11",
