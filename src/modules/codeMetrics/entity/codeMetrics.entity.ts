@@ -15,74 +15,81 @@ export class CodeMetrics {
   @Field(() => ID)
   u_id!: string;
 
+  @Column({ nullable: true })
+  @Field({ nullable: true })
+  repoName?: string;
+
+  @Column({ nullable: true })
+  @Field({ nullable: true })
+  username?: string;
+
   @ManyToOne(() => Project, (project) => project.codeMetrics, { onDelete: "CASCADE" })
   @Field(() => Project)
   project!: Project;
 
-  @Column()
-  @Field()
-  branch!: string;
+  @Column({ nullable: true })
+  @Field({ nullable: true })
+  branch?: string;
 
-  @Column()
-  @Field()
-  language!: string;
-
-  @Column({ type: "int" })
-  @Field()
-  linesOfCode!: number;
-
-  @Column({ type: "int" })
-  @Field()
-  filesCount!: number;
-
-  @Column({ type: "float" })
-  @Field()
-  coverage!: number;
-
-  @Column({ type: "int" })
-  @Field()
-  duplicatedLines!: number;
-
-  @Column({ type: "int" })
-  @Field()
-  violations!: number;
+  @Column({ nullable: true })
+  @Field({ nullable: true })
+  language?: string;
 
   @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
-  complexity!: number;
+  linesOfCode?: number;
 
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  filesCount?: number;
+
+  @Column({ type: "float", nullable: true })
+  @Field({ nullable: true })
+  coverage?: number;
+
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  duplicatedLines?: number;
+
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  violations?: number;
+
+  @Column({ type: "int", nullable: true })
+  @Field({ nullable: true })
+  complexity?: number;
 
   @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
   technicalDebt?: number;
-  
-  @Field({nullable: true })
+
   @Column({ type: 'float', nullable: true })
-  reliabilityRating!: number;
-  
   @Field({ nullable: true })
+  reliabilityRating?: number;
+
   @Column({ type: 'float', nullable: true })
-  securityRating!: number;
-  
   @Field({ nullable: true })
+  securityRating?: number;
+
   @Column({ type: 'int', nullable: true })
-  bugs!: number;
-  
   @Field({ nullable: true })
+  bugs?: number;
+
   @Column({ type: 'int', nullable: true })
-  vulnerabilities!: number;
-  
   @Field({ nullable: true })
+  vulnerabilities?: number;
+
   @Column({ type: 'int', nullable: true })
-  codeSmells!: number;
-  
   @Field({ nullable: true })
+  codeSmells?: number;
+
   @Column({ type: 'float', nullable: true })
-  debtRatio!: number;
-  
   @Field({ nullable: true })
+  debtRatio?: number;
+
   @Column({ type: 'varchar', nullable: true })
-  qualityGateStatus!: string;
+  @Field({ nullable: true })
+  qualityGateStatus?: string;
 
   @CreateDateColumn()
   @Field(() => String)

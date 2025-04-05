@@ -25,6 +25,16 @@ export class SonarIssue {
     })
     @Field(() => Project)
     project!: Project;
+
+    @Column({ nullable: true }) 
+    @Field({ nullable: true })
+    repoName?: string;
+
+  
+    @Column({nullable:true})
+    @Field({nullable:true})
+    username?: string;
+  
     
     @Column({ default: "main" })
     @Field()
