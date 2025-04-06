@@ -77,7 +77,7 @@ async getProjectAnalysis(
     }
 
     const repoDetails = await axios.get(
-      `https://api.github.com/repos/${githubUsername}/${repoName.trim()}`,
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName.trim()}`,
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
@@ -97,7 +97,7 @@ async getProjectAnalysis(
 
     try {
       const branchResponse = await axios.get(
-        `https://api.github.com/repos/${githubUsername}/${repoName.trim()}/branches`,
+        `${GITHUB_API_URL}/repos/${githubUsername}/${repoName.trim()}/branches`,
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
@@ -172,7 +172,7 @@ async getProjectAnalysis(
       }
 
       const response = await axios.get(
-        `https://api.github.com/repos/${githubUsername}/${cleanedRepoName}/branches`,
+        `${GITHUB_API_URL}/repos/${githubUsername}/${cleanedRepoName}/branches`,
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
@@ -602,7 +602,6 @@ private async analyzeRepository(user: User, repo: any) {
       const webhookName = `Analysis_${project.repoName}`;
       const webhookUrl = `${process.env.WEBHOOK_URL}?projectId=${project.u_id}`;
   
-      // List existing webhooks
       const listResponse = await fetch(
         `${SONARQUBE_API_URL}/api/webhooks/list`,
         { headers: { Authorization: authHeader } }
@@ -789,7 +788,7 @@ private async waitForProjectAnalysis(projectKey: string, authHeader: string, bra
           if (statusResponse.ok && statusData.current) {
               const status = statusData.current.status;
               if (status === "SUCCESS") {
-                  console.log(`✅ SonarQube analysis completed for branch: ${branch}`);
+                  console.log(`SonarQube analysis completed for branch: ${branch}`);
                   return;
               }
               if (status === "FAILED") {
@@ -797,15 +796,15 @@ private async waitForProjectAnalysis(projectKey: string, authHeader: string, bra
               }
           }
 
-          console.log(`⏳ Waiting for analysis to complete (Attempt ${attempt}/${maxAttempts})...`);
+          console.log(`Waiting for analysis to complete (Attempt ${attempt}/${maxAttempts})...`);
           await delay(10000); // Wait 10 seconds
       } catch (error) {
-          console.warn(`⚠️ Error while checking analysis status: ${error}`);
+          console.warn(`Error while checking analysis status: ${error}`);
           await delay(10000);
       }
   }
 
-  throw new Error(`🚫 Timeout: Analysis not completed for branch: ${branch}`);
+  throw new Error(`Timeout: Analysis not completed for branch: ${branch}`);
 }
 
   private async cloneRepository(githubUrl: string, branch: string): Promise<string> {
@@ -848,18 +847,18 @@ private async waitForProjectAnalysis(projectKey: string, authHeader: string, bra
         }
       );
   
-      console.log(`✅ SonarScanner Output:\n${stdout}`);
+      console.log(`SonarScanner Output:\n${stdout}`);
   
       if (stderr) {
-        console.warn(`⚠️ SonarScanner Warnings:\n${stderr}`);
+        console.warn(`SonarScanner Warnings:\n${stderr}`);
       }
   
       if (!stdout.includes("EXECUTION SUCCESS")) {
-        throw new Error(`🚫 SonarScanner did not succeed. Check logs.`);
+        throw new Error(`SonarScanner did not succeed. Check logs.`);
       }
   
       if (stdout.includes("EXECUTION FAILURE") || stderr.includes("ERROR")) {
-        throw new Error(`❌ SonarScanner execution failed:\n${stdout}\n${stderr}`);
+        throw new Error(`SonarScanner execution failed:\n${stdout}\n${stderr}`);
       }
     } catch (error: any) {
       console.error(`SonarScanner failed for ${branchName}:`, error.message || error);
@@ -1188,10 +1187,10 @@ private async getCodeMetrics(projectKey: string, branchName: string, authHeader:
   const textResponse = await response.text();
 
   try {
-      // Try to parse the response as JSON
+      
       return JSON.parse(textResponse);
   } catch (error) {
-      // If JSON parsing fails, check for semicolon-separated string
+      
       if (textResponse.includes(';')) {
           const metricsObject: { [key: string]: number } = {};
           const metricsArray = textResponse.split(';');
@@ -1385,139 +1384,139 @@ private async storeBranchAnalysis(
 }
 
 
-  private async fetchBranchMetrics(projectKey: string, branchName: string, authHeader: string) {
-    const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
-    metricsUrl.searchParams.append('component', projectKey);
-    metricsUrl.searchParams.append('branch', branchName);
-    metricsUrl.searchParams.append('metricKeys', [
-        'ncloc', 'files', 'coverage', 'duplicated_lines_density',
-        'violations', 'complexity', 'sqale_index', 'reliability_rating',
-        'security_rating', 'bugs', 'vulnerabilities', 'code_smells'
-    ].join(','));
+  // private async fetchBranchMetrics(projectKey: string, branchName: string, authHeader: string) {
+  //   const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
+  //   metricsUrl.searchParams.append('component', projectKey);
+  //   metricsUrl.searchParams.append('branch', branchName);
+  //   metricsUrl.searchParams.append('metricKeys', [
+  //       'ncloc', 'files', 'coverage', 'duplicated_lines_density',
+  //       'violations', 'complexity', 'sqale_index', 'reliability_rating',
+  //       'security_rating', 'bugs', 'vulnerabilities', 'code_smells'
+  //   ].join(','));
 
-    const metricsResponse = await fetch(metricsUrl.toString(), {
-        headers: { Authorization: authHeader }
-    });
+  //   const metricsResponse = await fetch(metricsUrl.toString(), {
+  //       headers: { Authorization: authHeader }
+  //   });
 
-    if (!metricsResponse.ok) {
-        throw new Error(`Metrics API failed: ${await metricsResponse.text()}`);
-    }
+  //   if (!metricsResponse.ok) {
+  //       throw new Error(`Metrics API failed: ${await metricsResponse.text()}`);
+  //   }
 
-    const metricsData = await metricsResponse.json();
-    const measures = metricsData.component?.measures || [];
+  //   const metricsData = await metricsResponse.json();
+  //   const measures = metricsData.component?.measures || [];
 
-    let qualityGateStatus = 'UNKNOWN';
-    const qualityGateUrl = new URL(`${SONARQUBE_API_URL}/api/qualitygates/project_status`);
-    qualityGateUrl.searchParams.append('projectKey', projectKey);
-    qualityGateUrl.searchParams.append('branch', branchName);
+  //   let qualityGateStatus = 'UNKNOWN';
+  //   const qualityGateUrl = new URL(`${SONARQUBE_API_URL}/api/qualitygates/project_status`);
+  //   qualityGateUrl.searchParams.append('projectKey', projectKey);
+  //   qualityGateUrl.searchParams.append('branch', branchName);
 
-    const qualityGateResponse = await fetch(qualityGateUrl.toString(), {
-        headers: { Authorization: authHeader }
-    });
+  //   const qualityGateResponse = await fetch(qualityGateUrl.toString(), {
+  //       headers: { Authorization: authHeader }
+  //   });
 
-    if (qualityGateResponse.ok) {
-        const qualityGateData = await qualityGateResponse.json();
-        qualityGateStatus = qualityGateData.projectStatus.status;
-    }
+  //   if (qualityGateResponse.ok) {
+  //       const qualityGateData = await qualityGateResponse.json();
+  //       qualityGateStatus = qualityGateData.projectStatus.status;
+  //   }
 
-    return { measures, qualityGateStatus };
-  }
+  //   return { measures, qualityGateStatus };
+  // }
 
-  private async fetchBranchIssues(projectKey: string, branchName: string, project: Project, authHeader: string) {
-    const allIssues: SonarIssue[] = [];
-    let page = 1;
-    const pageSize = 500;
-    let totalIssues = 0;
-    let fetchedIssues = 0;
+  // private async fetchBranchIssues(projectKey: string, branchName: string, project: Project, authHeader: string) {
+  //   const allIssues: SonarIssue[] = [];
+  //   let page = 1;
+  //   const pageSize = 500;
+  //   let totalIssues = 0;
+  //   let fetchedIssues = 0;
 
-    do {
-        const issuesUrl = new URL(`${SONARQUBE_API_URL}/api/issues/search`);
-        issuesUrl.searchParams.append('projects', projectKey);
-        issuesUrl.searchParams.append('branch', branchName);
-        issuesUrl.searchParams.append('ps', pageSize.toString());
-        issuesUrl.searchParams.append('p', page.toString());
-        issuesUrl.searchParams.append('resolved', 'false');
-        issuesUrl.searchParams.append('types', 'BUG,VULNERABILITY,CODE_SMELL');
+  //   do {
+  //       const issuesUrl = new URL(`${SONARQUBE_API_URL}/api/issues/search`);
+  //       issuesUrl.searchParams.append('projects', projectKey);
+  //       issuesUrl.searchParams.append('branch', branchName);
+  //       issuesUrl.searchParams.append('ps', pageSize.toString());
+  //       issuesUrl.searchParams.append('p', page.toString());
+  //       issuesUrl.searchParams.append('resolved', 'false');
+  //       issuesUrl.searchParams.append('types', 'BUG,VULNERABILITY,CODE_SMELL');
 
-        const issuesResponse = await fetch(issuesUrl.toString(), {
-            headers: { Authorization: authHeader }
-        });
+  //       const issuesResponse = await fetch(issuesUrl.toString(), {
+  //           headers: { Authorization: authHeader }
+  //       });
 
-        if (!issuesResponse.ok) {
-            throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
-        }
+  //       if (!issuesResponse.ok) {
+  //           throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
+  //       }
 
-        const issuesData = await issuesResponse.json();
-        const issues = issuesData.issues || [];
-        totalIssues = issuesData.total || 0;
+  //       const issuesData = await issuesResponse.json();
+  //       const issues = issuesData.issues || [];
+  //       totalIssues = issuesData.total || 0;
 
-        allIssues.push(...issues.map((issue: any) => {
-            const newIssue = new SonarIssue();
-            newIssue.key = issue.key;
-            newIssue.type = issue.type;
-            newIssue.severity = issue.severity;
-            newIssue.message = issue.message;
-            newIssue.rule = issue.rule;
-            newIssue.component = issue.component;
-            newIssue.line = issue.line || 0;
-            newIssue.status = issue.status;
-            newIssue.resolution = issue.resolution;
-            newIssue.project = project;
-            newIssue.branch = branchName;
-            return newIssue;
-        }));
+  //       allIssues.push(...issues.map((issue: any) => {
+  //           const newIssue = new SonarIssue();
+  //           newIssue.key = issue.key;
+  //           newIssue.type = issue.type;
+  //           newIssue.severity = issue.severity;
+  //           newIssue.message = issue.message;
+  //           newIssue.rule = issue.rule;
+  //           newIssue.component = issue.component;
+  //           newIssue.line = issue.line || 0;
+  //           newIssue.status = issue.status;
+  //           newIssue.resolution = issue.resolution;
+  //           newIssue.project = project;
+  //           newIssue.branch = branchName;
+  //           return newIssue;
+  //       }));
 
-        fetchedIssues += issues.length;
-        page++;
-        if (fetchedIssues < totalIssues) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
+  //       fetchedIssues += issues.length;
+  //       page++;
+  //       if (fetchedIssues < totalIssues) {
+  //           await new Promise(resolve => setTimeout(resolve, 200));
+  //       }
 
-    } while (fetchedIssues < totalIssues);
+  //   } while (fetchedIssues < totalIssues);
 
-    return allIssues;
-  }
+  //   return allIssues;
+  // }
 
-  private createBranchMetrics(project: Project, branchName: string, measures: any[], qualityGateStatus: string) {
-    const codeMetrics = new CodeMetrics();
-    codeMetrics.project = project;
-    codeMetrics.branch = branchName;
-    codeMetrics.qualityGateStatus = qualityGateStatus;
-    codeMetrics.language = this.detectLanguage(measures);
+  // private createBranchMetrics(project: Project, branchName: string, measures: any[], qualityGateStatus: string) {
+  //   const codeMetrics = new CodeMetrics();
+  //   codeMetrics.project = project;
+  //   codeMetrics.branch = branchName;
+  //   codeMetrics.qualityGateStatus = qualityGateStatus;
+  //   codeMetrics.language = this.detectLanguage(measures);
     
-    codeMetrics.linesOfCode = 0;
-    codeMetrics.filesCount = 0;
-    codeMetrics.coverage = 0;
-    codeMetrics.duplicatedLines = 0;
-    codeMetrics.violations = 0;
-    codeMetrics.complexity = 0;
-    codeMetrics.technicalDebt = 0;
-    codeMetrics.reliabilityRating = 1;
-    codeMetrics.securityRating = 1;
-    codeMetrics.bugs = 0;
-    codeMetrics.vulnerabilities = 0;
-    codeMetrics.codeSmells = 0;
+  //   codeMetrics.linesOfCode = 0;
+  //   codeMetrics.filesCount = 0;
+  //   codeMetrics.coverage = 0;
+  //   codeMetrics.duplicatedLines = 0;
+  //   codeMetrics.violations = 0;
+  //   codeMetrics.complexity = 0;
+  //   codeMetrics.technicalDebt = 0;
+  //   codeMetrics.reliabilityRating = 1;
+  //   codeMetrics.securityRating = 1;
+  //   codeMetrics.bugs = 0;
+  //   codeMetrics.vulnerabilities = 0;
+  //   codeMetrics.codeSmells = 0;
 
-    measures.forEach((measure: any) => {
-        const value = parseFloat(measure.value);
-        switch (measure.metric) {
-            case "ncloc": codeMetrics.linesOfCode = value || 0; break;
-            case "files": codeMetrics.filesCount = value || 0; break;
-            case "coverage": codeMetrics.coverage = value || 0; break;
-            case "duplicated_lines_density": codeMetrics.duplicatedLines = value || 0; break;
-            case "violations": codeMetrics.violations = value || 0; break;
-            case "complexity": codeMetrics.complexity = value || 0; break;
-            case "sqale_index": codeMetrics.technicalDebt = value || 0; break;
-            case "reliability_rating": codeMetrics.reliabilityRating = value || 1; break;
-            case "security_rating": codeMetrics.securityRating = value || 1; break;
-            case "bugs": codeMetrics.bugs = value || 0; break;
-            case "vulnerabilities": codeMetrics.vulnerabilities = value || 0; break;
-            case "code_smells": codeMetrics.codeSmells = value || 0; break;
-        }
-    });
+  //   measures.forEach((measure: any) => {
+  //       const value = parseFloat(measure.value);
+  //       switch (measure.metric) {
+  //           case "ncloc": codeMetrics.linesOfCode = value || 0; break;
+  //           case "files": codeMetrics.filesCount = value || 0; break;
+  //           case "coverage": codeMetrics.coverage = value || 0; break;
+  //           case "duplicated_lines_density": codeMetrics.duplicatedLines = value || 0; break;
+  //           case "violations": codeMetrics.violations = value || 0; break;
+  //           case "complexity": codeMetrics.complexity = value || 0; break;
+  //           case "sqale_index": codeMetrics.technicalDebt = value || 0; break;
+  //           case "reliability_rating": codeMetrics.reliabilityRating = value || 1; break;
+  //           case "security_rating": codeMetrics.securityRating = value || 1; break;
+  //           case "bugs": codeMetrics.bugs = value || 0; break;
+  //           case "vulnerabilities": codeMetrics.vulnerabilities = value || 0; break;
+  //           case "code_smells": codeMetrics.codeSmells = value || 0; break;
+  //       }
+  //   });
 
-    return codeMetrics;
-  }
+  //   return codeMetrics;
+  // }
 
   private detectLanguage(measures: any[]): string {
     const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");

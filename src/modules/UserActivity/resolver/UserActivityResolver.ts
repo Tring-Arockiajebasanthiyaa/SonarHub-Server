@@ -13,7 +13,7 @@ export class UserActivityResolver {
   private SONARQUBE_URL = process.env.SONARQUBE_API_URL || "http://localhost:9000";
   private SONARQUBE_TOKEN = process.env.SONARQUBE_API_TOKEN || "";
   private GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
-
+  private  GITHUB_API_URL = process.env.GITHUB_API;
   @Query(() => UserActivity, { nullable: true })
 async getUserActivity(
   @Arg("githubUsername") githubUsername: string,
@@ -41,7 +41,7 @@ async getUserActivity(
 
     console.log(`[INFO] Found user:`, user);
 
-    const githubApiUrl = `https://api.github.com/user/repos`;
+    const githubApiUrl = `${this.GITHUB_API_URL}/user/repos`;
     console.log("Fetching GitHub repositories...");
 
     const githubResponse = await fetch(githubApiUrl, {
@@ -98,7 +98,7 @@ async getUserActivity(
 
 
       const commitsResponse = await fetch(
-        `https://api.github.com/repos/${githubUsername}/${repo.name}/commits?per_page=100`,
+        `${this.GITHUB_API_URL}/repos/${githubUsername}/${repo.name}/commits?per_page=100`,
         { headers: { Authorization: `Bearer ${userGithubToken}` } }  
       );
 
