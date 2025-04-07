@@ -21,7 +21,7 @@ async function runAnalysisForAllUsers() {
       console.log(`Triggering analysis for user: ${user.username}`);
       try {
         const result = await sonarQubeResolver.triggerAutomaticAnalysis(user.username);
-        console.log(result);
+        
       } catch (error) {
         console.error(`Error analyzing ${user.username}:`, error);
       }
