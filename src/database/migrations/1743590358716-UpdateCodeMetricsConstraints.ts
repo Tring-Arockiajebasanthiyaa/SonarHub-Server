@@ -4,7 +4,7 @@ export class UpdateCodeMetricsConstraints1743590358716 implements MigrationInter
     name = 'UpdateCodeMetricsConstraints1743590358716'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // Set default values for required fields
+    
         await queryRunner.query(`
             ALTER TABLE "code_metrics" 
             ALTER COLUMN "linesOfCode" SET NOT NULL,
@@ -33,7 +33,7 @@ export class UpdateCodeMetricsConstraints1743590358716 implements MigrationInter
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // Revert to nullable columns
+       
         await queryRunner.query(`
             ALTER TABLE "code_metrics" 
             ALTER COLUMN "linesOfCode" DROP NOT NULL,
