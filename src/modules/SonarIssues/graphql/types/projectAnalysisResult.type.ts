@@ -2,8 +2,10 @@ import { ObjectType, Field } from "type-graphql";
 import { Project } from "../../../Project/entity/project.entity";
 import { Branch } from "../../../branch/entity/branch.entity";
 import { CodeMetrics } from "../../../codeMetrics/entity/codeMetrics.entity";
-import { SonarIssue } from "../../entity/sonarIssue.entity";
+// import { SonarIssue } from "modules/SonarIssues/entity/SonarIssue.entity";
 import { LocReport } from "./LocReport";
+import { SonarIssue } from "../../../SonarIssues/entity/SonarIssue.entity"
+
 
 @ObjectType()
 export class ProjectAnalysisResult {
@@ -15,6 +17,7 @@ export class ProjectAnalysisResult {
 
   @Field(() => [CodeMetrics])
     codeMetrics: CodeMetrics[]=[];
+
 
   @Field(() => [SonarIssue])
     sonarIssues: SonarIssue[]=[];

@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
 import { ObjectType, Field } from "type-graphql";
-import { Repo } from "../../GitHubRepository/entity/repo.entity";
+import { Repo } from "../../GitHubRepository/entity/Repo.entity";
 import { User } from "../../user/entity/user.entity"; 
 
 @ObjectType()

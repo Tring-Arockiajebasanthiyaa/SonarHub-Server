@@ -1,5 +1,5 @@
 import { Resolver, Query, Arg, Mutation } from "type-graphql";
-import { SonarIssue } from "../entity/sonarIssue.entity";
+// import { SonarIssue } from "../entity/sonarIssue.entity";
 import { Project } from "../../Project/entity/project.entity";
 import { User } from "../../user/entity/user.entity";
 import { CodeMetrics } from "../../codeMetrics/entity/codeMetrics.entity";
@@ -9,13 +9,14 @@ import fetch from "node-fetch";
 import { AnalysisResult } from "../graphql/types/AnalysisResult";
 import { LocReport } from "../graphql/types/LocReport";
 import { Branch } from "../../branch/entity/branch.entity";
-import { Repo } from "../../GitHubRepository/entity/repo.entity";
+import { Repo } from "../../GitHubRepository/entity/Repo.entity";
 import { QueryRunner } from "typeorm";
 import { ProjectAnalysisResult } from "../graphql/types/projectAnalysisResult.type";
 import axios from "axios";
 import { exec} from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
+import { SonarIssue } from "../entity/SonarIssue.entity";
 
 const execAsync = promisify(exec);
 dotenv.config();

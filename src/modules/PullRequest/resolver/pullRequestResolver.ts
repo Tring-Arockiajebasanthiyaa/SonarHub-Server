@@ -37,7 +37,7 @@ export class PullRequestResolver {
 
     for (const pr of response.data) {
       const exists = await prRepo.findOne({
-        where: { prId: pr.number, branch: branchName },
+        where: { prId: pr.number},
       });
 
       if (!exists && pr.head.ref === branchName) {
