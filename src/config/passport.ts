@@ -3,13 +3,23 @@ import { Strategy as GitHubStrategy, Profile } from "passport-github2";
 import { User } from "../modules/user/entity/user.entity";
 import dataSource from "../database/data-source";
 import jwt from "jsonwebtoken";
+
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
+const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !GITHUB_CALLBACK_URL || !JWT_SECRET) {
+  throw new Error("GitHub OAuth environment variables are missing.");
+}
+
 passport.use(
   new GitHubStrategy(
     {
-      clientID: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      callbackURL: process.env.GITHUB_CALLBACK_URL!,
-      scope: ["user:email", "repo"], 
+      clientID: GITHUB_CLIENT_ID,
+      clientSecret: GITHUB_CLIENT_SECRET,
+      callbackURL: GITHUB_CALLBACK_URL,
+      scope: ["user:email", "repo"],
       passReqToCallback: true,
     },
     async (
@@ -21,7 +31,7 @@ passport.use(
     ) => {
       try {
         console.log("GitHub Profile:", profile);
-        console.log("Access Token:", accessToken); 
+        console.log("Access Token:", accessToken);
 
         let user = await dataSource.getRepository(User).findOne({
           where: { githubId: profile.id },
@@ -43,12 +53,10 @@ passport.use(
           user.githubAccessToken = accessToken;
           await dataSource.getRepository(User).save(user);
         }
-       
-        const token = jwt.sign({ u_id: user.u_id }, process.env.JWT_SECRET!, {
-          expiresIn: "1d",
-        });
 
-        done(null, { user, token });
+        const token = jwt.sign({ userId: user.u_id }, JWT_SECRET, { expiresIn: "1d" });
+
+        return done(null, { user, token });
       } catch (error) {
         console.error("GitHub Strategy Error:", error);
         return done(error, null);
@@ -61,22 +69,31 @@ passport.serializeUser((data: any, done) => {
   done(null, data?.user?.u_id || null);
 });
 
-passport.deserializeUser(async (u_id: string, done) => {
+passport.deserializeUser(async (userId: string, done) => {
   try {
-    if (!u_id) return done(null, null);
+    if (!userId) {
+      return done(null, null);
+    }
 
-    const user = await dataSource.getRepository(User).findOne({ where: { u_id } });
+    const user = await dataSource.getRepository(User).findOne({ where: { u_id: userId } });
 
     if (!user) {
       console.error("User Not Found in DB");
       return done(new Error("User not found"), null);
     }
 
-    done(null, user);
+    return done(null, user);
   } catch (error) {
     console.error("Deserialization Error:", error);
-    done(error, null);
+    return done(error, null);
   }
 });
 
 export default passport;
+
+
+
+
+
+
+

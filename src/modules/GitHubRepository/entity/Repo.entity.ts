@@ -1,22 +1,23 @@
-import { ObjectType, Field } from "type-graphql";
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Unique } from "typeorm";
 import { User } from "../../user/entity/user.entity";
-
-@ObjectType()
+import { ObjectType, Field } from "type-graphql";
+@ObjectType() 
 @Entity("repositories")
+@Unique(["name", "owner"]) 
 export class Repo {
   @Field()
   @PrimaryGeneratedColumn()
   id!: number;
-
+  
   @Field()
   @Column()
   name!: string;
-
+  
   @Field()
-  @Column()
-  owner!: string;
-
+  @ManyToOne(() => User, (user) => user.username, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "owner", referencedColumnName: "u_id" })
+  owner!: User;
+  
   @Field({ nullable: true })
   @Column({ nullable: true })
   language?: string;
@@ -28,8 +29,4 @@ export class Repo {
   @Field()
   @Column({ default: 0 })
   totalCommits!: number;
-
-  @ManyToOne(() => User, { nullable: false })
-  @JoinColumn({ name: "username", referencedColumnName: "username" })
-  user!: User;
 }
