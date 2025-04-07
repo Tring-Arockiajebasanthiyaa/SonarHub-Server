@@ -191,158 +191,6 @@ async getProjectAnalysis(
     }
   }
 
-  // @Mutation(() => String)
-  // async triggerAutomaticAnalysis(
-  //   @Arg("githubUsername") githubUsername: string
-  // ): Promise<string> {
-  //   try {
-  //     const user = await this.userRepo.findOne({ 
-  //       where: { username: githubUsername },
-  //       select: ["u_id", "username", "githubAccessToken"]
-  //     });
-      
-  //     if (!user) throw new Error(`User ${githubUsername} not found`);
-  //     if (!user.githubAccessToken) {
-  //       throw new Error(`GitHub access token not found for user ${githubUsername}`);
-  //     }
-
-  //     const reposResponse = await fetch(`${GITHUB_API_URL}/users/${githubUsername}/repos`, {
-  //       headers: { Authorization: `Bearer ${user.githubAccessToken}` },
-  //     });
-
-  //     if (!reposResponse.ok) throw new Error("Failed to fetch repositories.");
-
-  //     const repositories = await reposResponse.json();
-
-  //     for (const repo of repositories) {
-  //       await this.analyzeRepository(user, repo);
-  //     }
-
-  //     return `SonarQube analysis triggered for all repositories of ${githubUsername}`;
-  //   } catch (error) {
-  //     throw new Error(error instanceof Error ? error.message : String(error));
-  //   }
-  // }
-
-  // @Mutation(() => AnalysisResult)
-  // async analyzeSingleRepository(
-  //   @Arg("githubUsername") githubUsername: string,
-  //   @Arg("repoName") repoName: string
-  // ): Promise<AnalysisResult> {
-  //   try {
-  //     const user = await this.userRepo.findOne({ 
-  //       where: { username: githubUsername },
-  //       select: ["u_id", "username", "githubAccessToken"]
-  //     });
-      
-  //     if (!user) {
-  //       throw new Error(`User ${githubUsername} not found`);
-  //     }
-  //     if (!user.githubAccessToken) {
-  //       throw new Error(`GitHub access token not found for user ${githubUsername}`);
-  //     }
-
-  //     const repoResponse = await fetch(
-  //       `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}`,
-  //       { 
-  //         headers: { 
-  //           Authorization: `Bearer ${user.githubAccessToken}`,
-  //           Accept: "application/vnd.github.v3+json"
-  //         } 
-  //       }
-  //     );
-
-  //     if (!repoResponse.ok) {
-  //       const errorData = await repoResponse.json();
-  //       throw new Error(`GitHub API error: ${repoResponse.status} - ${errorData.message}`);
-  //     }
-
-  //     const repo = await repoResponse.json();
-
-  //     if (!repo.html_url || repo.html_url.includes('github.com/default')) {
-  //       throw new Error(`Invalid repository URL received: ${repo.html_url}`);
-  //     }
-
-  //     await this.analyzeRepository(user, repo);
-
-  //     return {
-  //       success: true,
-  //       message: `Successfully analyzed repository ${repoName}`
-  //     };
-  //   } catch (error: any) {
-  //     return {
-  //       success: false,
-  //       message: error.message
-  //     };
-  //   }
-  // }
-  
-  // private async analyzeRepository(user: User, repo: any) {
-  //   const projectKey = `${user.username}_${repo.name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-  //   const authHeader = `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`;
-    
-  //   const locData = await this.getRepositoryLinesOfCode(user, repo);
-    
-  //   let project = await this.projectRepo.findOne({ 
-  //     where: { repoName: projectKey },
-  //     relations: ["codeMetrics"] 
-  //   });
-
-  //   const analysisStartTime = new Date();
-  
-  //   if (!project) {
-  //     project = this.projectRepo.create({
-  //       title: repo.name,
-  //       repoName: projectKey,
-  //       description: repo.description || `Analysis for ${repo.name}`,
-  //       githubUrl: repo.html_url,
-  //       isPrivate: repo.private,
-  //       defaultBranch: repo.default_branch || 'main',
-  //       user,
-  //       estimatedLinesOfCode: locData.totalLines,
-  //       languageDistribution: locData.languages,
-  //       username: user.username,
-  //       analysisStartTime,
-  //       result: "In Progress"
-  //     });
-  //   } else {
-  //     project.githubUrl = repo.html_url;
-  //     project.isPrivate = repo.private;
-  //     project.defaultBranch = repo.default_branch || 'main';
-  //     project.estimatedLinesOfCode = locData.totalLines;
-  //     project.languageDistribution = locData.languages;
-  //     project.analysisStartTime = analysisStartTime;
-  //     project.result = "In Progress";
-      
-  //     if (project.codeMetrics) {
-  //       await this.metricsRepo.remove(project.codeMetrics);
-  //     }
-  //   }
-
-  //   await this.projectRepo.save(project);
-  
-  //   try {
-  //     await this.configureSonarQubeProject(user, project, repo, authHeader);
-  //     await this.triggerSonarQubeAnalysis(user, project, repo, authHeader);
-  //     const analysisEndTime = new Date();
-  //     project.result = "Analysis completed";
-  //     project.analysisEndTime = analysisEndTime;
-  //     project.analysisDuration = Math.floor(
-  //       (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
-  //     );
-  //     project.lastAnalysisDate = new Date();
-  //     await this.projectRepo.save(project);
-  //   } catch (error) {
-  //     const analysisEndTime = new Date();
-  //     project.result = "Analysis failed";
-  //     project.analysisEndTime = analysisEndTime;
-  //     project.analysisDuration = Math.floor(
-  //       (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
-  //     );
-  //     await this.projectRepo.save(project);
-  //     throw error;
-  //   }
-  // }
 
   @Mutation(() => String)
 async triggerAutomaticAnalysis(
@@ -701,7 +549,7 @@ private async analyzeRepository(user: User, repo: any) {
             const projectName = `${project.title}-${branchName}`;
 
             try {
-                console.log(`🔍 Starting analysis for branch: ${branchName}`);
+                console.log(`Starting analysis for branch: ${branchName}`);
 
                 await this.cleanBranch(project.u_id, branchName);
 
@@ -765,7 +613,7 @@ private async cleanBranch(projectId: string, branchName: string): Promise<void> 
       await queryRunner.commitTransaction();
   } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(`⚠️ Failed to clean data for branch ${branchName}:`, error);
+      console.error(`Failed to clean data for branch ${branchName}:`, error);
   } finally {
       await queryRunner.release();
   }
@@ -881,12 +729,11 @@ private createSonarPropertiesFile(
   const workingDir = path.join(normalizedRepoPath, '.scannerwork').replace(/\\/g, '/');
   const projectBaseDir = path.resolve(normalizedRepoPath).replace(/\\/g, '/');
 
-  // Clean old analysis
+  
   if (fs.existsSync(workingDir)) {
     fs.removeSync(workingDir);
   }
 
-  // Dummy file to force change detection
   const dummyPath = path.join(normalizedRepoPath, 'force-sonar.txt');
   fs.writeFileSync(dummyPath, `Forced update at ${new Date().toISOString()}`);
 
@@ -1201,7 +1048,6 @@ private async getCodeMetrics(projectKey: string, branchName: string, authHeader:
           return metricsObject;
       }
 
-      // If it's neither JSON nor semicolon-separated string, throw an error
       throw new Error(`Unexpected response format: ${textResponse}`);
   }
 }
@@ -1384,148 +1230,7 @@ private async storeBranchAnalysis(
 }
 
 
-  // private async fetchBranchMetrics(projectKey: string, branchName: string, authHeader: string) {
-  //   const metricsUrl = new URL(`${SONARQUBE_API_URL}/api/measures/component`);
-  //   metricsUrl.searchParams.append('component', projectKey);
-  //   metricsUrl.searchParams.append('branch', branchName);
-  //   metricsUrl.searchParams.append('metricKeys', [
-  //       'ncloc', 'files', 'coverage', 'duplicated_lines_density',
-  //       'violations', 'complexity', 'sqale_index', 'reliability_rating',
-  //       'security_rating', 'bugs', 'vulnerabilities', 'code_smells'
-  //   ].join(','));
-
-  //   const metricsResponse = await fetch(metricsUrl.toString(), {
-  //       headers: { Authorization: authHeader }
-  //   });
-
-  //   if (!metricsResponse.ok) {
-  //       throw new Error(`Metrics API failed: ${await metricsResponse.text()}`);
-  //   }
-
-  //   const metricsData = await metricsResponse.json();
-  //   const measures = metricsData.component?.measures || [];
-
-  //   let qualityGateStatus = 'UNKNOWN';
-  //   const qualityGateUrl = new URL(`${SONARQUBE_API_URL}/api/qualitygates/project_status`);
-  //   qualityGateUrl.searchParams.append('projectKey', projectKey);
-  //   qualityGateUrl.searchParams.append('branch', branchName);
-
-  //   const qualityGateResponse = await fetch(qualityGateUrl.toString(), {
-  //       headers: { Authorization: authHeader }
-  //   });
-
-  //   if (qualityGateResponse.ok) {
-  //       const qualityGateData = await qualityGateResponse.json();
-  //       qualityGateStatus = qualityGateData.projectStatus.status;
-  //   }
-
-  //   return { measures, qualityGateStatus };
-  // }
-
-  // private async fetchBranchIssues(projectKey: string, branchName: string, project: Project, authHeader: string) {
-  //   const allIssues: SonarIssue[] = [];
-  //   let page = 1;
-  //   const pageSize = 500;
-  //   let totalIssues = 0;
-  //   let fetchedIssues = 0;
-
-  //   do {
-  //       const issuesUrl = new URL(`${SONARQUBE_API_URL}/api/issues/search`);
-  //       issuesUrl.searchParams.append('projects', projectKey);
-  //       issuesUrl.searchParams.append('branch', branchName);
-  //       issuesUrl.searchParams.append('ps', pageSize.toString());
-  //       issuesUrl.searchParams.append('p', page.toString());
-  //       issuesUrl.searchParams.append('resolved', 'false');
-  //       issuesUrl.searchParams.append('types', 'BUG,VULNERABILITY,CODE_SMELL');
-
-  //       const issuesResponse = await fetch(issuesUrl.toString(), {
-  //           headers: { Authorization: authHeader }
-  //       });
-
-  //       if (!issuesResponse.ok) {
-  //           throw new Error(`Failed to fetch issues: ${await issuesResponse.text()}`);
-  //       }
-
-  //       const issuesData = await issuesResponse.json();
-  //       const issues = issuesData.issues || [];
-  //       totalIssues = issuesData.total || 0;
-
-  //       allIssues.push(...issues.map((issue: any) => {
-  //           const newIssue = new SonarIssue();
-  //           newIssue.key = issue.key;
-  //           newIssue.type = issue.type;
-  //           newIssue.severity = issue.severity;
-  //           newIssue.message = issue.message;
-  //           newIssue.rule = issue.rule;
-  //           newIssue.component = issue.component;
-  //           newIssue.line = issue.line || 0;
-  //           newIssue.status = issue.status;
-  //           newIssue.resolution = issue.resolution;
-  //           newIssue.project = project;
-  //           newIssue.branch = branchName;
-  //           return newIssue;
-  //       }));
-
-  //       fetchedIssues += issues.length;
-  //       page++;
-  //       if (fetchedIssues < totalIssues) {
-  //           await new Promise(resolve => setTimeout(resolve, 200));
-  //       }
-
-  //   } while (fetchedIssues < totalIssues);
-
-  //   return allIssues;
-  // }
-
-  // private createBranchMetrics(project: Project, branchName: string, measures: any[], qualityGateStatus: string) {
-  //   const codeMetrics = new CodeMetrics();
-  //   codeMetrics.project = project;
-  //   codeMetrics.branch = branchName;
-  //   codeMetrics.qualityGateStatus = qualityGateStatus;
-  //   codeMetrics.language = this.detectLanguage(measures);
-    
-  //   codeMetrics.linesOfCode = 0;
-  //   codeMetrics.filesCount = 0;
-  //   codeMetrics.coverage = 0;
-  //   codeMetrics.duplicatedLines = 0;
-  //   codeMetrics.violations = 0;
-  //   codeMetrics.complexity = 0;
-  //   codeMetrics.technicalDebt = 0;
-  //   codeMetrics.reliabilityRating = 1;
-  //   codeMetrics.securityRating = 1;
-  //   codeMetrics.bugs = 0;
-  //   codeMetrics.vulnerabilities = 0;
-  //   codeMetrics.codeSmells = 0;
-
-  //   measures.forEach((measure: any) => {
-  //       const value = parseFloat(measure.value);
-  //       switch (measure.metric) {
-  //           case "ncloc": codeMetrics.linesOfCode = value || 0; break;
-  //           case "files": codeMetrics.filesCount = value || 0; break;
-  //           case "coverage": codeMetrics.coverage = value || 0; break;
-  //           case "duplicated_lines_density": codeMetrics.duplicatedLines = value || 0; break;
-  //           case "violations": codeMetrics.violations = value || 0; break;
-  //           case "complexity": codeMetrics.complexity = value || 0; break;
-  //           case "sqale_index": codeMetrics.technicalDebt = value || 0; break;
-  //           case "reliability_rating": codeMetrics.reliabilityRating = value || 1; break;
-  //           case "security_rating": codeMetrics.securityRating = value || 1; break;
-  //           case "bugs": codeMetrics.bugs = value || 0; break;
-  //           case "vulnerabilities": codeMetrics.vulnerabilities = value || 0; break;
-  //           case "code_smells": codeMetrics.codeSmells = value || 0; break;
-  //       }
-  //   });
-
-  //   return codeMetrics;
-  // }
-
-  private detectLanguage(measures: any[]): string {
-    const languageMeasure = measures.find(m => m.metric === "ncloc_language_distribution");
-    if (languageMeasure) {
-        const distribution = this.parseLanguageDistribution(languageMeasure.value);
-        return Object.keys(distribution)[0] || "unknown";
-    }
-    return "unknown";
-  }
+  
 
   private async getLinesOfCodeReport(
     githubUsername: string,

@@ -1,13 +1,46 @@
-import { Branch } from "../../branch/entity/branch.entity";
-import { Resolver, Query, Arg, Int } from "type-graphql";
+import { Branch } from "../entity/branch.entity";
+import { Resolver, Query, Arg} from "type-graphql";
 import dataSource from "../../../database/data-source";
+import dotenv from "dotenv";
+import axios from "axios";
+import { User } from "../../user/entity/user.entity";
+dotenv.config();
+
+
+const GITHUB_API_URL = process.env.GITHUB_API;
 @Resolver()
 export class BranchResolver {
   @Query(() => [Branch])
-  async getBranchesByRepo(
-    @Arg("repoId", () => Int) repoId: number
+  async getBranchesByUsernameAndRepo(
+    @Arg("githubUsername") githubUsername: string,
+    @Arg("repoName") repoName: string
   ): Promise<Branch[]> {
-    const branchRepo = dataSource.getRepository(Branch);
-    return await branchRepo.find({ where: { repoId } });
+    const userRepo = dataSource.getRepository(User);
+ 
+    // Fetch GitHub access token for the user
+    const user = await userRepo.findOneOrFail({
+      where: { username: githubUsername },
+    });
+ 
+    const response = await axios.get(
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/branches`,
+      {
+        headers: {
+          Authorization: `Bearer ${user.githubAccessToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      }
+    );
+ 
+    // Convert API response to match your Branch entity (or GraphQL type)
+    const branches: Branch[] = response.data.map((branch: any) => ({
+      name: branch.name,
+      repoName,
+      username: githubUsername,
+    }));
+    
+    return branches;
   }
+ 
+ 
 }

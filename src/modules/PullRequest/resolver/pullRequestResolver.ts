@@ -1,5 +1,5 @@
 import { Resolver, Query, Arg, Int ,Ctx} from "type-graphql";
-import dataSource from "database/data-source";
+import dataSource from "../../../database/data-source";
 import { PullRequest } from "../entity/pullRequest.entity";
 import { User } from "../../user/entity/user.entity";
 import axios from "axios";
@@ -25,7 +25,8 @@ export class PullRequestResolver {
     const user = await userRepo.findOneOrFail({ where: { username: githubUsername } });
 
     const response = await axios.get(
-      `https://api.github.com/repos/${githubUsername}/${repoName}/pulls?state=all`,
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls?state=all`
+,
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
@@ -41,7 +42,7 @@ export class PullRequestResolver {
 
       if (!exists && pr.head.ref === branchName) {
         const diffStatRes = await axios.get(
-          `https://api.github.com/repos/${githubUsername}/${repoName}/pulls/${pr.number}`,
+          `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls/${pr.number}`,
           {
             headers: {
               Authorization: `Bearer ${user.githubAccessToken}`,
