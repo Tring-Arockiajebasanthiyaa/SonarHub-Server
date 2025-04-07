@@ -10,11 +10,12 @@ import session from "express-session";
 import { MyContext } from "./types/MyContext";
 import authRoutes from "./routes/authRoutes";
 import dataSource from "./database/data-source"; 
+import "./cronJob/cronJob";
+import { WebhookController } from './controllers/webhook.controller';
 
 dotenv.config();
 
 async function startServer() {
-  // Initialize the data source
   await dataSource.initialize();
   console.log("Data Source has been initialized!");
 
@@ -41,7 +42,8 @@ async function startServer() {
   app.use(passport.initialize());
   app.use(passport.session());
   app.use(authRoutes);
-
+  const webhookController = new WebhookController();
+  app.post('/webhook', (req, res) => webhookController.handleSonarQubeWebhook(req, res));
   // Initialize Apollo Server with Schema and Context
   const apolloServer = new ApolloServer<MyContext>({
     schema: await schema(),

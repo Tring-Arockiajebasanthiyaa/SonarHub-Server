@@ -12,7 +12,7 @@ export const dbdataSource: DataSourceOptions = {
   port: Number(process.env.DB_PORT),
   username: process.env.DB_USERNAME || "postgres",
   password: process.env.DB_PASSWORD || "1234",
-  synchronize: true,
+  synchronize: false,
   logging: true,
 };
 
