@@ -3,7 +3,7 @@ import {
     PrimaryGeneratedColumn,
     Column,
     ManyToOne,
-    JoinColumn,
+    JoinColumn,Unique
   } from "typeorm";
   import { ObjectType, Field } from "type-graphql";
   import { Repo } from "../../GitHubRepository/entity/Repo.entity";
@@ -11,13 +11,14 @@ import {
   
   @ObjectType()
   @Entity("pull_requests")
+  @Unique(["prId", "githubUsername", "repo"]) 
   export class PullRequest {
     @Field()
     @PrimaryGeneratedColumn()
     u_id!: string;
   
     @Field()
-    @Column({ unique: true })
+    @Column()
     prId!: number;
 
     @Field()

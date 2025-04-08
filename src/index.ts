@@ -16,6 +16,7 @@ import { WebhookController } from './controllers/webhook.controller';
 dotenv.config();
 
 async function startServer() {
+  
   await dataSource.initialize();
   console.log("Data Source has been initialized!");
 

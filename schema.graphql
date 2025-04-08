@@ -73,6 +73,7 @@ type Mutation {
   forgotPassword(email: String!): String!
   githubAuth: AuthResponse
   handleWebhookEvent(authHeader: String!, projectId: String!, status: String!): Boolean!
+  requestGithubAuth(code: String, username: String!): RequestGithubAuthResponse!
   resetPassword(newPassword: String!, token: String!): String!
   sendPasswordChangeEmail(email: String!): String!
   setPassword(email: String!, password: String!): String!
@@ -152,6 +153,12 @@ type Repo {
   owner: User!
   stars: Float!
   totalCommits: Float!
+}
+
+type RequestGithubAuthResponse {
+  message: String!
+  success: Boolean!
+  url: String!
 }
 
 type SonarIssue {
