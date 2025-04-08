@@ -262,7 +262,6 @@ async triggerAutomaticPullRequestAnalysis(
       return `No open pull requests found for repository ${repoName}`;
     }
 
-    // Only analyze PRs that belong exactly to the given repo
     const matchingPRs = pullRequests.filter(
       pr => pr.base?.repo?.name === repoName && pr.base?.repo?.owner?.login === githubUsername
     );
@@ -273,7 +272,7 @@ async triggerAutomaticPullRequestAnalysis(
 
     for (const pr of matchingPRs) {
       const baseRepo = pr.base.repo;
-      await this.analyzeRepository(user, baseRepo);
+      await this.analyzeSingleRepository(user.username, baseRepo);
     }
 
     return `Triggered analysis for ${matchingPRs.length} PR(s) in ${repoName}`;

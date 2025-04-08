@@ -20,17 +20,16 @@ export class RequestGithubAuthResolver {
       const clientSecret = process.env.GITHUB_CLIENT_SECRET;
       const githubUrl = process.env.GITHUB_URL;
       const callbackUrl = process.env.GITHUB_CALLBACK_URL;
-
+      const GITHUB_API_URL=process.env.GITHUB_API;
       if (!clientId || !callbackUrl || !clientSecret) {
         console.error("Missing GitHub OAuth env vars.");
         throw new Error("Missing GitHub OAuth env vars.");
       }
 
       if (!code) {
-        // If code is not present, start the OAuth process
         const redirectUri = `${callbackUrl}?username=${username}`;
-        const url = `${githubUrl}/login/oauth/authorize?client_id=${clientId}&scope=user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
-
+        const url = `${githubUrl}/login/oauth/authorize?client_id=${clientId}&scope=repo,user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        
         return {
           success: true,
           url,
@@ -38,7 +37,6 @@ export class RequestGithubAuthResolver {
         };
       }
 
-      // Step 2: Fetch the GitHub access token
       const tokenResponse = await axios.post(
         `${githubUrl}/login/oauth/access_token`,
         {
@@ -47,51 +45,38 @@ export class RequestGithubAuthResolver {
           code,
         },
         {
-          headers: {
-            Accept: "application/json",
-          },
+          headers: { Accept: "application/json" },
         }
       );
 
-      console.log("Token Response:", tokenResponse.data);  // Debugging log
       const { access_token, error } = tokenResponse.data;
 
-      // Handle possible errors
-      if (error) {
-        console.error("GitHub OAuth error:", error);
-        if (error === "rate_limit") {
-          return {
-            success: false,
-            url: "",
-            message: "Rate limit exceeded, please reauthorize the application.",
-          };
-        }
+      if (error || !access_token) {
+        console.error("GitHub OAuth token error:", error);
         throw new Error("Failed to retrieve GitHub access token.");
       }
 
-      if (!access_token) {
-        console.error("Access token is missing in response.");
-        throw new Error("Failed to retrieve GitHub access token.");
-      }
-
-      // Step 3: Fetch user info from GitHub
-      const userResponse = await axios.get("https://api.github.com/user", {
+      const userResponse = await axios.get(`${GITHUB_API_URL}/user`, {
         headers: {
           Authorization: `Bearer ${access_token}`,
         },
       });
 
-      console.log("GitHub User Data:", userResponse.data);  // Debugging log
-
       const { id: githubId, avatar_url } = userResponse.data;
 
-     
+      const scopeCheck = await axios.get(`${GITHUB_API_URL}`, {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+
+      console.log("Granted Scopes:", scopeCheck.headers["x-oauth-scopes"]);
+
       const userRepo = dataSource.getRepository(User);
       const user = await userRepo.findOneBy({ username });
 
       if (!user) {
-        console.error("User not found:", username);
-        throw new Error("User not found");
+        throw new Error(`User not found for username: ${username}`);
       }
 
       user.githubId = githubId.toString();
