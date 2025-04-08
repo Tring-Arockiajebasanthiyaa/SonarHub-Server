@@ -226,6 +226,63 @@ async triggerAutomaticAnalysis(
   }
 }
 
+@Mutation(() => String)
+async triggerAutomaticPullRequestAnalysis(
+  @Arg("githubUsername") githubUsername: string,
+  @Arg("repoName") repoName: string
+): Promise<string> {
+  try {
+    const user = await this.userRepo.findOne({
+      where: { username: githubUsername },
+      select: ["u_id", "username", "githubAccessToken"]
+    });
+
+    if (!user) throw new Error(`User ${githubUsername} not found`);
+    if (!user.githubAccessToken) {
+      throw new Error(`GitHub access token not found for user ${githubUsername}`);
+    }
+
+    const prResponse = await fetch(
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls`,
+      {
+        headers: {
+          Authorization: `Bearer ${user.githubAccessToken}`,
+          Accept: "application/vnd.github.v3+json"
+        }
+      }
+    );
+
+    if (!prResponse.ok) {
+      const errText = await prResponse.text();
+      throw new Error(`Failed to fetch PRs: ${errText}`);
+    }
+
+    const pullRequests = await prResponse.json();
+    if (!Array.isArray(pullRequests) || pullRequests.length === 0) {
+      return `No open pull requests found for repository ${repoName}`;
+    }
+
+    // Only analyze PRs that belong exactly to the given repo
+    const matchingPRs = pullRequests.filter(
+      pr => pr.base?.repo?.name === repoName && pr.base?.repo?.owner?.login === githubUsername
+    );
+
+    if (matchingPRs.length === 0) {
+      return `No matching PRs found for repo ${repoName}`;
+    }
+
+    for (const pr of matchingPRs) {
+      const baseRepo = pr.base.repo;
+      await this.analyzeRepository(user, baseRepo);
+    }
+
+    return `Triggered analysis for ${matchingPRs.length} PR(s) in ${repoName}`;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+
 @Mutation(() => AnalysisResult)
 async analyzeSingleRepository(
   @Arg("githubUsername") githubUsername: string,

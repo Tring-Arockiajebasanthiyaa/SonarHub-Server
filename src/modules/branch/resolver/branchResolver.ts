@@ -17,7 +17,7 @@ export class BranchResolver {
   ): Promise<Branch[]> {
     const userRepo = dataSource.getRepository(User);
  
-    // Fetch GitHub access token for the user
+    
     const user = await userRepo.findOneOrFail({
       where: { username: githubUsername },
     });
@@ -32,7 +32,7 @@ export class BranchResolver {
       }
     );
  
-    // Convert API response to match your Branch entity (or GraphQL type)
+   
     const branches: Branch[] = response.data.map((branch: any) => ({
       name: branch.name,
       repoName,

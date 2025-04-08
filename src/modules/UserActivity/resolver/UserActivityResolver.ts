@@ -12,7 +12,6 @@ dotenv.config();
 export class UserActivityResolver {
   private SONARQUBE_URL = process.env.SONARQUBE_API_URL || "http://localhost:9000";
   private SONARQUBE_TOKEN = process.env.SONARQUBE_API_TOKEN || "";
-  private GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
   private  GITHUB_API_URL = process.env.GITHUB_API;
   @Query(() => UserActivity, { nullable: true })
 async getUserActivity(

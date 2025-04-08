@@ -20,7 +20,6 @@ import {
     @Column({ unique: true })
     prId!: number;
 
-  
     @Field()
     @Column()
     title!: string;
