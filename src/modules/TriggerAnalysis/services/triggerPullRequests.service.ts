@@ -44,8 +44,8 @@ export async function triggerPRAnalysis(username: string, repo: string, branch: 
   }
 
   const prData = await prResponse.json();
-console.log("PR Data:", JSON.stringify(prData, null, 2)); // Log entire PR object
-console.log("PR State from GitHub:", prData.state);
+  console.log("PR Data:", JSON.stringify(prData, null, 2)); // Log entire PR object
+  console.log("PR State from GitHub:", prData.state);
 
   if (prData.state !== "open") {
     const closedMessage = `PR #${prId} is closed. No analysis performed.`;

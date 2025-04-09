@@ -1,5 +1,4 @@
 import { Resolver, Query, Arg, Mutation } from "type-graphql";
-// import { SonarIssue } from "../entity/sonarIssue.entity";
 import { Project } from "../../Project/entity/project.entity";
 import { User } from "../../user/entity/user.entity";
 import { CodeMetrics } from "../../codeMetrics/entity/codeMetrics.entity";
@@ -19,6 +18,13 @@ import { promisify } from 'util';
 import { SonarIssue } from "../entity/SonarIssue.entity";
 import { LanguageBytesPerLineEntity } from "../../LanguageBytesPerLine/entity/languageBytesPerLine.entity";
 const execAsync = promisify(exec);
+import * as fs from "fs";
+
+
+import util from "util";
+
+const execPromise = util.promisify(exec);
+
 dotenv.config();
 
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
@@ -208,60 +214,7 @@ async triggerAutomaticAnalysis(
   }
 }
 
-// @Mutation(() => String)
-// async triggerAutomaticPullRequestAnalysis(
-//   @Arg("githubUsername") githubUsername: string,
-//   @Arg("repoName") repoName: string
-// ): Promise<string> {
-//   try {
-//     const user = await this.userRepo.findOne({
-//       where: { username: githubUsername },
-//       select: ["u_id", "username", "githubAccessToken"]
-//     });
 
-//     if (!user) throw new Error(`User ${githubUsername} not found`);
-//     if (!user.githubAccessToken) {
-//       throw new Error(`GitHub access token not found for user ${githubUsername}`);
-//     }
-
-//     const prResponse = await fetch(
-//       `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls`,
-//       {
-//         headers: {
-//           Authorization: `Bearer ${user.githubAccessToken}`,
-//           Accept: "application/vnd.github.v3+json"
-//         }
-//       }
-//     );
-
-//     if (!prResponse.ok) {
-//       const errText = await prResponse.text();
-//       throw new Error(`Failed to fetch PRs: ${errText}`);
-//     }
-
-//     const pullRequests = await prResponse.json();
-//     if (!Array.isArray(pullRequests) || pullRequests.length === 0) {
-//       return `No open pull requests found for repository ${repoName}`;
-//     }
-
-//     const matchingPRs = pullRequests.filter(
-//       pr => pr.base?.repo?.name === repoName && pr.base?.repo?.owner?.login === githubUsername
-//     );
-
-//     if (matchingPRs.length === 0) {
-//       return `No matching PRs found for repo ${repoName}`;
-//     }
-
-//     for (const pr of matchingPRs) {
-//       const baseRepo = pr.base.repo;
-//       await this.analyzeSingleRepository(user.username, repoName);
-//     }
-
-//     return `Triggered analysis for ${matchingPRs.length} PR(s) in ${repoName}`;
-//   } catch (error: any) {
-//     throw new Error(error.message);
-//   }
-// }
 
 @Mutation(() => AnalysisResult)
 async triggerBranchAnalysisIfPROpen(
@@ -667,9 +620,8 @@ async triggerBranchAnalysis(
         branchName
       );
 
-      
       await this.runSonarScanner(repoPath, branchName);
-
+      
       await this.waitForProjectAnalysis(projectKey, authHeader, branchName);
 
       await this.storeAnalysisResults(project, branchName, authHeader);
@@ -1017,8 +969,8 @@ private async waitForProjectAnalysis(projectKey: string, authHeader: string, bra
       const normalizedRepoPath = path.normalize(repoPath);
       const propertiesPath = path.join(normalizedRepoPath, 'sonar-project.properties').replace(/\\/g, '/');
   
-      console.log(`📦 Running SonarScanner for branch: ${branchName}`);
-      console.log(`🛠 Using properties file at: ${propertiesPath}`);
+      console.log(`Running SonarScanner for branch: ${branchName}`);
+      console.log(`Using properties file at: ${propertiesPath}`);
   
       const { stdout, stderr } = await execAsync(
         `sonar-scanner -X -Dproject.settings=${propertiesPath}`,
