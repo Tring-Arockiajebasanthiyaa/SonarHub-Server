@@ -13,7 +13,7 @@ export async function triggerPRAnalysis(username: string, repo: string, branch: 
   const sourceBranch = "main";
   const sonarIssuesUrl = `${SONARQUBE_API_URL}/api/issues/search?projectKeys=${projectKey}&branch=${sourceBranch}&issueStatuses=OPEN,CONFIRMED`;
 
-  let issueSummary = `### SonarQube Analysis for branch \`${branch}\`\n`;
+  let issueSummary = `SonarQube Analysis for branch \`${branch}\`\n`;
 
   try {
     const authHeader = `Basic ${Buffer.from(`${SONARQUBE_TOKEN}:`).toString("base64")}`;

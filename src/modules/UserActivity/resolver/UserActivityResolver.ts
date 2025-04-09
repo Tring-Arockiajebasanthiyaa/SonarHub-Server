@@ -181,7 +181,7 @@ async getUserActivity(
     await userActivityRepository.save(userActivity);
     return userActivity;
   } catch (error) {
-    console.error(`[ERROR] Failed to fetch user activity:`, error);
+    console.error(`Failed to fetch user activity:`, error);
     throw new Error("Failed to fetch user activity.");
   }
 }

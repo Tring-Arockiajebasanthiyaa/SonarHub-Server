@@ -11,26 +11,20 @@ import { WebhookController } from "../controllers/webhook.controller";
 
 dotenv.config();
 
-// // Mock passport and other dependencies
-// jest.mock("passport", () => ({
-//   authenticate: jest.fn().mockReturnValue((req: any, res: any, next: () => any) => next()),
-// }));
-
-// jest.mock("../database/data-source");
 jest.mock("express", () => {
   const mockExpress :any= jest.fn(() => ({
     use: jest.fn(),
     post: jest.fn(),
     listen: jest.fn().mockImplementation((port, callback) => {
-      callback();  // Simulate the callback being called when listen is invoked
-      return { address: '127.0.0.1', port: 4000 }; // Mocked response of listen
+      callback();  
+      return { address: '127.0.0.1', port: 4000 };
     }),
     disable: jest.fn(),
     get: jest.fn(),
     set: jest.fn(),
-    address: jest.fn(() => ({ port: 4000 })),  // Ensure address method is correctly mocked
+    address: jest.fn(() => ({ port: 4000 })), 
     _router: {
-      stack: [] // Often needed by supertest
+      stack: []
     }
   }));
   mockExpress.json = jest.fn();

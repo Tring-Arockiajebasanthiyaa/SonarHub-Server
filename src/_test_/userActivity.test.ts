@@ -5,7 +5,7 @@ import { User } from "../modules/user/entity/user.entity";
 import axios from "axios";
 import { MyContext } from "../types/MyContext";
 
-// Mock setup
+
 jest.mock("axios");
 jest.mock("../database/data-source");
 
@@ -41,7 +41,7 @@ describe("UserActivityResolver", () => {
   });
 
   it("should fetch user activity and update or create UserActivity", async () => {
-    // Setup specific mocks for this test
+    
     (axios.get as jest.Mock).mockImplementation((url: string) => {
       if (url.includes('https://api.github.com/users/testuser/repos')) {
         return Promise.resolve({

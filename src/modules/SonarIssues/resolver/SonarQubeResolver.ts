@@ -17,31 +17,31 @@ import { exec} from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
 import { SonarIssue } from "../entity/SonarIssue.entity";
-
+import { LanguageBytesPerLineEntity } from "../../LanguageBytesPerLine/entity/languageBytesPerLine.entity";
 const execAsync = promisify(exec);
 dotenv.config();
 
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
 const SONARQUBE_API_TOKEN = process.env.SONARQUBE_API_TOKEN;
 const GITHUB_API_URL = process.env.GITHUB_API;
-enum LanguageBytesPerLine {
-  JavaScript = 20,
-  TypeScript = 20,
-  Java = 15,
-  Python = 10,
-  Ruby = 10,
-  PHP = 15,
-  "C++" = 15,
-  C = 15,
-  Go = 15,
-  Swift = 15,
-  Kotlin = 15,
-  HTML = 30,
-  CSS = 25,
-  SCSS = 25,
-  JSON = 40,
-  Default = 20,
-}
+// enum LanguageBytesPerLine {
+//   JavaScript = 20,
+//   TypeScript = 20,
+//   Java = 15,
+//   Python = 10,
+//   Ruby = 10,
+//   PHP = 15,
+//   "C++" = 15,
+//   C = 15,
+//   Go = 15,
+//   Swift = 15,
+//   Kotlin = 15,
+//   HTML = 30,
+//   CSS = 25,
+//   SCSS = 25,
+//   JSON = 40,
+//   Default = 20,
+// }
 @Resolver()
 export class SonarQubeResolver {
   private readonly projectRepo = dataSource.getRepository(Project);
@@ -272,7 +272,7 @@ async triggerAutomaticPullRequestAnalysis(
 
     for (const pr of matchingPRs) {
       const baseRepo = pr.base.repo;
-      await this.analyzeSingleRepository(user.username, baseRepo);
+      await this.analyzeSingleRepository(user.username, repoName);
     }
 
     return `Triggered analysis for ${matchingPRs.length} PR(s) in ${repoName}`;
@@ -910,10 +910,18 @@ private createSonarPropertiesFile(
       let totalLines = 0;
       const languages: Record<string, number> = {};
   
+      
+      const languageEntities = await dataSource.getRepository(LanguageBytesPerLineEntity).find();
+      const languageMap: Record<string, number> = {};
+  
+      for (const entity of languageEntities) {
+        languageMap[entity.language] = entity.avgBytesPerLine;
+      }
+  
+      const defaultBytesPerLine = languageMap["Default"] || 50;
+  
       for (const [language, bytes] of Object.entries(languagesData)) {
-        const avgBytesPerLine =
-          LanguageBytesPerLine[language as keyof typeof LanguageBytesPerLine] ||
-          LanguageBytesPerLine.Default;
+        const avgBytesPerLine = languageMap[language] || defaultBytesPerLine;
         const lines = Math.floor(Number(bytes) / avgBytesPerLine);
         languages[language] = Math.round(lines);
         totalLines += lines;
@@ -921,6 +929,7 @@ private createSonarPropertiesFile(
   
       return { totalLines: Math.round(totalLines), languages };
     } catch (error) {
+      console.error("Error calculating lines of code:", error);
       return { totalLines: 0, languages: {} };
     }
   }
