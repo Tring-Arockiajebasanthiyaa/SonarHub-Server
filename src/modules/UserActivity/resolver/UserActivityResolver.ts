@@ -107,17 +107,26 @@ async getUserActivity(
         commitHistory.push(`${repo.name}: ${commits.length} commits`);
       }
 
-      const sonarIssuesResponse = await fetch(
-        `${this.SONARQUBE_URL}/api/issues/search?componentKeys=${repo.name}&resolved=false`,
-        {
-          headers: { Authorization: `Basic ${Buffer.from(this.SONARQUBE_TOKEN + ":").toString("base64")}` },
+      try {
+        const sonarIssuesResponse = await fetch(
+          `${this.SONARQUBE_URL}/api/issues/search?componentKeys=${repo.name}&resolved=false`,
+          {
+            headers: {
+              Authorization: `Basic ${Buffer.from(this.SONARQUBE_TOKEN + ":").toString("base64")}`,
+            },
+          }
+        );
+      
+        if (sonarIssuesResponse.ok) {
+          const sonarIssuesData = await sonarIssuesResponse.json();
+          overallSonarIssues += sonarIssuesData.total;
+        } else {
+          console.warn(`Failed to fetch SonarQube issues for ${repo.name}: ${sonarIssuesResponse.status}`);
         }
-      );
-
-      if (sonarIssuesResponse.ok) {
-        const sonarIssuesData = await sonarIssuesResponse.json();
-        overallSonarIssues += sonarIssuesData.total;
+      } catch (sonarError) {
+        console.warn(`Error fetching SonarQube data for ${repo.name}:`, sonarError);
       }
+      
     }
 
     const issuePercentage = totalRepositories > 0 ? (overallSonarIssues / totalRepositories) * 100 : 0;

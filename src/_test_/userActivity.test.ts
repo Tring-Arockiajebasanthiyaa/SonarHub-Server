@@ -3,7 +3,7 @@ import dataSource from "../database/data-source";
 import { UserActivity } from "../modules/UserActivity/entity/userActivity.entity";
 import { User } from "../modules/user/entity/user.entity";
 import axios from "axios";
-import { MyContext } from "../types/MyContext";
+
 
 
 jest.mock("axios");
@@ -19,7 +19,6 @@ describe("UserActivityResolver", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    resolver = new UserActivityResolver();
 
     userRepository = {
       findOne: jest.fn().mockResolvedValue({
@@ -35,9 +34,17 @@ describe("UserActivityResolver", () => {
     };
 
     (dataSource.getRepository as jest.Mock).mockImplementation((entity: any) => {
-      if (entity === User) return userRepository;
-      if (entity === UserActivity) return userActivityRepository;
+      if (entity === User) {
+        return userRepository;
+      }
+    
+      if (entity === UserActivity) {
+        return userActivityRepository;
+      }
+    
+      return null;
     });
+    
   });
 
   it("should fetch user activity and update or create UserActivity", async () => {

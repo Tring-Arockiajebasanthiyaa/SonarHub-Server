@@ -1,4 +1,4 @@
-import express, { json } from "express";
+import express from "express";
 import passport from "passport";
 import request from "supertest";
 import dataSource from "../database/data-source";
@@ -10,7 +10,7 @@ import "../cronJob/cronJob";
 import { WebhookController } from "../controllers/webhook.controller";
 
 dotenv.config();
-
+const hashedpassword=process.env.HASHEDCODE;
 jest.mock("express", () => {
   const mockExpress :any= jest.fn(() => ({
     use: jest.fn(),
@@ -58,7 +58,7 @@ jest.mock("../controllers/webhook.controller", () => ({
 
 describe("GitHub Authentication Routes", () => {
   let app: express.Application;
-  const mockUser = { u_id: "12345", password: "hashedPassword" };
+  const mockUser = { u_id: "12345", password: `${hashedpassword}` };
 
   beforeAll(() => {
     app = express();
