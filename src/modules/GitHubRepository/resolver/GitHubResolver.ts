@@ -26,12 +26,13 @@ export class GitHubResolver {
   
     const GITHUB_TOKEN = user.githubAccessToken;
   
-    const response = await fetch(`${GITHUB_API_URL}/users/${username}/repos`, {
+    const response = await fetch(`${GITHUB_API_URL}/user/repos?visibility=all&per_page=100`, {
       headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
         Accept: "application/vnd.github.v3+json",
       },
     });
+    
   
     if (!response.ok) {
       const errorData = await response.json();
@@ -49,7 +50,6 @@ export class GitHubResolver {
         const commits = await commitsResponse.json();
         const totalCommits = Array.isArray(commits) ? commits.length : 0;
   
-        // Find existing repo by name and owner ID
         let existingRepo = await repoRepo.findOne({ 
           where: { 
             name: repo.name, 

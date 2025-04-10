@@ -53,6 +53,23 @@ A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `dat
 """
 scalar DateTimeISO
 
+type GitHubComment {
+  body: String!
+  branchName: String!
+  createdAt: String!
+  id: String!
+  prId: Int!
+  repoName: String!
+  userLogin: String!
+}
+
+type GithubRepo {
+  description: String
+  html_url: String!
+  name: String!
+  private: Boolean!
+}
+
 """
 The `JSONObject` scalar type represents JSON objects as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -73,13 +90,15 @@ type Mutation {
   forgotPassword(email: String!): String!
   githubAuth: AuthResponse
   handleWebhookEvent(authHeader: String!, projectId: String!, status: String!): Boolean!
+  requestGithubAuth(code: String, username: String!): RequestGithubAuthResponse!
   resetPassword(newPassword: String!, token: String!): String!
   sendPasswordChangeEmail(email: String!): String!
   setPassword(email: String!, password: String!): String!
   signIn(email: String!, password: String!): String!
   triggerAnalysis(branchName: String!, prId: Int!, repoName: String!, username: String!): TriggerAnalysisResponse!
   triggerAutomaticAnalysis(githubUsername: String!): String!
-  triggerAutomaticPullRequestAnalysis(githubUsername: String!, repoName: String!): String!
+  triggerBranchAnalysis(branchName: String!, githubUsername: String!, repoName: String!): AnalysisResult!
+  triggerBranchAnalysisIfPROpen(branchName: String!, githubUsername: String!, repoName: String!): AnalysisResult!
 }
 
 type Project {
@@ -133,7 +152,9 @@ type PullRequest {
 
 type Query {
   checkAuth(onlyStatus: Boolean): AuthResponse
+  fetchPrivateRepos(username: String!): [GithubRepo!]!
   getBranchesByUsernameAndRepo(githubUsername: String!, repoName: String!): [Branch!]!
+  getPRComments(prId: Int!, repoName: String!, username: String!): [GitHubComment!]!
   getProjectAnalysis(branch: String, githubUsername: String!, repoName: String!): ProjectAnalysisResult!
   getProjects: [Project!]!
   getPullRequestsByBranch(branchName: String!, githubUsername: String!, repoName: String!): [PullRequest!]!
@@ -152,6 +173,12 @@ type Repo {
   owner: User!
   stars: Float!
   totalCommits: Float!
+}
+
+type RequestGithubAuthResponse {
+  message: String!
+  success: Boolean!
+  url: String!
 }
 
 type SonarIssue {

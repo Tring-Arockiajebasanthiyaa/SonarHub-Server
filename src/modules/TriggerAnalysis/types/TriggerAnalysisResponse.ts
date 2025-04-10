@@ -1,4 +1,4 @@
-// types/TriggerAnalysisResponse.ts
+
 import { ObjectType, Field } from "type-graphql";
 
 @ObjectType()

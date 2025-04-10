@@ -13,9 +13,10 @@ export class TriggerPullRequestResolver {
   ): Promise<TriggerAnalysisResponse> {
     try {
       const message = await triggerPRAnalysis(username, repoName, branchName, prId);
+
       return {
         success: true,
-        message,
+        message: message || "Analysis completed, but no message returned.",
       };
     } catch (error: any) {
       console.error("Error triggering PR analysis:", error);

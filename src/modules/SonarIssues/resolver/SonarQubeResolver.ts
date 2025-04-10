@@ -16,31 +16,16 @@ import { exec} from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
 import { SonarIssue } from "../entity/SonarIssue.entity";
-
+import { LanguageBytesPerLineEntity } from "../../LanguageBytesPerLine/entity/languageBytesPerLine.entity";
 const execAsync = promisify(exec);
+
+
 dotenv.config();
 
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
 const SONARQUBE_API_TOKEN = process.env.SONARQUBE_API_TOKEN;
 const GITHUB_API_URL = process.env.GITHUB_API;
-enum LanguageBytesPerLine {
-  JavaScript = 20,
-  TypeScript = 20,
-  Java = 15,
-  Python = 10,
-  Ruby = 10,
-  PHP = 15,
-  "C++" = 15,
-  C = 15,
-  Go = 15,
-  Swift = 15,
-  Kotlin = 15,
-  HTML = 30,
-  CSS = 25,
-  SCSS = 25,
-  JSON = 40,
-  Default = 20,
-}
+const GITHUB_ACCEPT_HEADER = "application/vnd.github.v3+json";
 @Resolver()
 export class SonarQubeResolver {
   private readonly projectRepo = dataSource.getRepository(Project);
@@ -81,7 +66,7 @@ async getProjectAnalysis(
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json",
+          Accept:  GITHUB_ACCEPT_HEADER,
         },
       }
     );
@@ -96,19 +81,10 @@ async getProjectAnalysis(
     
 
     try {
-      const branchResponse = await axios.get(
-        `${GITHUB_API_URL}/repos/${githubUsername}/${repoName.trim()}/branches`,
-        {
-          headers: {
-            Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
-          },
-        }
-      );
 
-      const branchRepo = dataSource.getRepository(Branch);
-      branches = await branchRepo.find({
-  where: {
+     const branchRepo = dataSource.getRepository(Branch);
+     branches = await branchRepo.find({
+     where: {
     repoName: project.title,
     username: githubUsername,
   },
@@ -176,7 +152,7 @@ async getProjectAnalysis(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
+            Accept:  GITHUB_ACCEPT_HEADER,
           },
         }
       );
@@ -225,11 +201,14 @@ async triggerAutomaticAnalysis(
   }
 }
 
-@Mutation(() => String)
-async triggerAutomaticPullRequestAnalysis(
+
+
+@Mutation(() => AnalysisResult)
+async triggerBranchAnalysisIfPROpen(
   @Arg("githubUsername") githubUsername: string,
-  @Arg("repoName") repoName: string
-): Promise<string> {
+  @Arg("repoName") repoName: string,
+  @Arg("branchName") branchName: string
+): Promise<AnalysisResult> {
   try {
     const user = await this.userRepo.findOne({
       where: { username: githubUsername },
@@ -241,43 +220,130 @@ async triggerAutomaticPullRequestAnalysis(
       throw new Error(`GitHub access token not found for user ${githubUsername}`);
     }
 
-    const prResponse = await fetch(
-      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls`,
+    
+    const branchResponse = await fetch(
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/branches/${branchName}`,
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json"
+          Accept:  GITHUB_ACCEPT_HEADER
         }
       }
     );
 
-    if (!prResponse.ok) {
-      const errText = await prResponse.text();
-      throw new Error(`Failed to fetch PRs: ${errText}`);
+    if (!branchResponse.ok) {
+      throw new Error(`Branch ${branchName} not found in repository ${repoName}`);
     }
 
-    const pullRequests = await prResponse.json();
-    if (!Array.isArray(pullRequests) || pullRequests.length === 0) {
-      return `No open pull requests found for repository ${repoName}`;
-    }
-
-    // Only analyze PRs that belong exactly to the given repo
-    const matchingPRs = pullRequests.filter(
-      pr => pr.base?.repo?.name === repoName && pr.base?.repo?.owner?.login === githubUsername
+    const prsResponse = await fetch(
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/pulls?state=open&head=${githubUsername}:${branchName}`,
+      {
+        headers: {
+          Authorization: `Bearer ${user.githubAccessToken}`,
+          Accept:  GITHUB_ACCEPT_HEADER
+        }
+      }
     );
 
-    if (matchingPRs.length === 0) {
-      return `No matching PRs found for repo ${repoName}`;
+    const prs = await prsResponse.json();
+
+    if (!Array.isArray(prs) || prs.length === 0) {
+      return {
+        success: false,
+        message: `No open pull request found for branch '${branchName}'`
+      };
     }
 
-    for (const pr of matchingPRs) {
-      const baseRepo = pr.base.repo;
-      await this.analyzeRepository(user, baseRepo);
+    const authHeader = `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`;
+    const projectKey = `${githubUsername}_${repoName}_${branchName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const projectName = `${repoName}-${branchName}`;
+
+    let project = await this.projectRepo.findOne({
+      where: { repoName: `${githubUsername}_${repoName}` },
+      relations: ["user"]
+    });
+
+    if (!project) {
+      const repoResponse = await fetch(
+        `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}`,
+        {
+          headers: {
+            Authorization: `Bearer ${user.githubAccessToken}`,
+            Accept:  GITHUB_ACCEPT_HEADER
+          }
+        }
+      );
+
+      if (!repoResponse.ok) {
+        throw new Error(`Repository ${repoName} not found`);
+      }
+
+      const repo = await repoResponse.json();
+      const locData = await this.getRepositoryLinesOfCode(user, repo);
+
+      project = this.projectRepo.create({
+        title: repo.name,
+        repoName: `${githubUsername}_${repo.name}`,
+        description: repo.description || `Analysis for ${repo.name}`,
+        githubUrl: repo.html_url,
+        isPrivate: repo.private,
+        defaultBranch: repo.default_branch || 'main',
+        user,
+        estimatedLinesOfCode: locData.totalLines,
+        languageDistribution: locData.languages,
+        username: user.username,
+        analysisStartTime: new Date(),
+        result: "In Progress"
+      });
+
+      await this.projectRepo.save(project);
     }
 
-    return `Triggered analysis for ${matchingPRs.length} PR(s) in ${repoName}`;
-  } catch (error: any) {
-    throw new Error(error.message);
+    await this.cleanBranch(project.u_id, branchName);
+
+    let repoPath: string | null = null;
+    try {
+      repoPath = await this.cloneRepository(project.githubUrl, branchName);
+
+      this.createSonarPropertiesFile(repoPath, projectKey, projectName, branchName);
+      await this.runSonarScanner(repoPath, branchName);
+      await this.waitForProjectAnalysis(projectKey, authHeader, branchName);
+      await this.storeAnalysisResults(project, branchName, authHeader);
+
+      const repo = await this.repoDetail.findOne({ where: { name: project.title } });
+      if (!repo) throw new Error("Repo not found");
+
+      const branchEntity = this.branchRepo.create({
+        name: branchName,
+        repoName: project.title,
+        username: user.username,
+        repo: repo,
+        user: user
+      });
+
+      await this.branchRepo.save(branchEntity);
+
+      return {
+        success: true,
+        message: `Successfully analyzed branch ${branchName} of repository ${repoName}`
+      };
+    } catch (error) {
+      console.error(`Analysis failed for branch ${branchName}:`, error);
+      return {
+        success: false,
+        message: `Analysis failed for branch ${branchName}: ${error instanceof Error ? error.message : String(error)}`
+      };
+    } finally {
+      if (repoPath) {
+        await this.cleanupRepository(repoPath);
+      }
+    }
+  } catch (error) {
+    console.error("Error in triggerBranchAnalysisIfPROpen:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unknown error occurred"
+    };
   }
 }
 
@@ -305,9 +371,9 @@ async analyzeSingleRepository(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json"
+            Accept:  GITHUB_ACCEPT_HEADER
           },
-          signal: AbortSignal.timeout(10000) // 10 second timeout
+          signal: AbortSignal.timeout(10000)
         }
       );
 
@@ -402,9 +468,19 @@ private async analyzeRepository(user: User, repo: any) {
   }
 
   try {
+    console.log("Starting SonarQube Configuration...");
     await this.configureSonarQubeProject(user, project, repo, authHeader);
-    await this.triggerSonarQubeAnalysis(user, project, repo, authHeader);
-    
+    console.log("Configuration done. Starting Analysis...");
+  
+    try {
+      await this.triggerSonarQubeAnalysis(user, project, repo, authHeader);
+      console.log("Analysis triggered successfully.");
+    } catch (error) {
+      console.error("Error triggering SonarQube Analysis:", error);
+      
+      throw error;
+    }
+  
     const analysisEndTime = new Date();
     project.result = "Analysis completed";
     project.analysisEndTime = analysisEndTime;
@@ -412,27 +488,167 @@ private async analyzeRepository(user: User, repo: any) {
       (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
     );
     project.lastAnalysisDate = new Date();
-    
+  
     await this.projectRepo.save(project);
+    console.log("Project updated with analysis result.");
   } catch (error) {
+    console.error("Outer catch - analysis failed:", error);
+  
     const analysisEndTime = new Date();
     project.result = "Analysis failed";
     project.analysisEndTime = analysisEndTime;
     project.analysisDuration = Math.floor(
       (analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000
     );
-    
+  
     try {
       await this.projectRepo.save(project);
+      console.log("Saved failed analysis status.");
     } catch (saveError) {
       console.error('Failed to save failed analysis state:', saveError);
     }
-    
+  
     throw error;
   }
+  
 }
 
+@Mutation(() => AnalysisResult)
+async triggerBranchAnalysis(
+  @Arg("githubUsername") githubUsername: string,
+  @Arg("repoName") repoName: string,
+  @Arg("branchName") branchName: string
+): Promise<AnalysisResult> {
+  try {
+    const user = await this.userRepo.findOne({
+      where: { username: githubUsername },
+      select: ["u_id", "username", "githubAccessToken"]
+    });
+
+    if (!user) throw new Error(`User ${githubUsername} not found`);
+    if (!user.githubAccessToken) {
+      throw new Error(`GitHub access token not found for user ${githubUsername}`);
+    }
+
    
+    const branchResponse = await fetch(
+      `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}/branches/${branchName}`,
+      {
+        headers: {
+          Authorization: `Bearer ${user.githubAccessToken}`,
+          Accept:  GITHUB_ACCEPT_HEADER
+        }
+      }
+    );
+
+    if (!branchResponse.ok) {
+      throw new Error(`Branch ${branchName} not found in repository ${repoName}`);
+    }
+
+    const authHeader = `Basic ${Buffer.from(`${SONARQUBE_API_TOKEN}:`).toString("base64")}`;
+    const projectKey = `${githubUsername}_${repoName}_${branchName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const projectName = `${repoName}-${branchName}`;
+
+    
+    let project = await this.projectRepo.findOne({
+      where: { repoName: `${githubUsername}_${repoName}` },
+      relations: ["user"]
+    });
+
+    if (!project) {
+      const repoResponse = await fetch(
+        `${GITHUB_API_URL}/repos/${githubUsername}/${repoName}`,
+        {
+          headers: {
+            Authorization: `Bearer ${user.githubAccessToken}`,
+            Accept:  GITHUB_ACCEPT_HEADER
+          }
+        }
+      );
+
+      if (!repoResponse.ok) {
+        throw new Error(`Repository ${repoName} not found`);
+      }
+
+      const repo = await repoResponse.json();
+      const locData = await this.getRepositoryLinesOfCode(user, repo);
+
+      project = this.projectRepo.create({
+        title: repo.name,
+        repoName: `${githubUsername}_${repo.name}`,
+        description: repo.description || `Analysis for ${repo.name}`,
+        githubUrl: repo.html_url,
+        isPrivate: repo.private,
+        defaultBranch: repo.default_branch || 'main',
+        user,
+        estimatedLinesOfCode: locData.totalLines,
+        languageDistribution: locData.languages,
+        username: user.username,
+        analysisStartTime: new Date(),
+        result: "In Progress"
+      });
+
+      await this.projectRepo.save(project);
+    }
+
+    
+    await this.cleanBranch(project.u_id, branchName);
+
+    let repoPath: string | null = null;
+    try {
+      
+      repoPath = await this.cloneRepository(project.githubUrl, branchName);
+
+      
+      this.createSonarPropertiesFile(
+        repoPath,
+        projectKey,
+        projectName,
+        branchName
+      );
+
+      await this.runSonarScanner(repoPath, branchName);
+      
+      await this.waitForProjectAnalysis(projectKey, authHeader, branchName);
+
+      await this.storeAnalysisResults(project, branchName, authHeader);
+
+      const repo = await this.repoDetail.findOne({ where: { name: project.title } });
+      if (!repo) throw new Error("Repo not found");
+
+      const branchEntity = this.branchRepo.create({
+        name: branchName,
+        repoName: project.title,
+        username: user.username,
+        repo: repo,
+        user: user
+      });
+
+      await this.branchRepo.save(branchEntity);
+
+      return {
+        success: true,
+        message: `Successfully analyzed branch ${branchName} of repository ${repoName}`
+      };
+    } catch (error) {
+      console.error(`Analysis failed for branch ${branchName}:`, error);
+      return {
+        success: false,
+        message: `Analysis failed for branch ${branchName}: ${error instanceof Error ? error.message : String(error)}`
+      };
+    } finally {
+      if (repoPath) {
+        await this.cleanupRepository(repoPath);
+      }
+    }
+  } catch (error) {
+    console.error("Error in triggerBranchAnalysis:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unknown error occurred"
+    };
+  }
+}
   private async configureSonarQubeProject(
     user: User,
     project: Project,
@@ -565,7 +781,7 @@ private async analyzeRepository(user: User, repo: any) {
     try {
         
         await this.configureSonarQubeWebhook(project, authHeader);
-
+         console.log("Analysed")
         const user = await this.userRepo.findOne({
           where: { username: project.username },
           select: ["u_id", "githubAccessToken","username"]
@@ -583,7 +799,7 @@ private async analyzeRepository(user: User, repo: any) {
             {
                 headers: {
                     Authorization: `Bearer ${user.githubAccessToken}`,
-                    Accept: "application/vnd.github.v3+json"
+                    Accept:  GITHUB_ACCEPT_HEADER
                 }
             }
         );
@@ -740,8 +956,8 @@ private async waitForProjectAnalysis(projectKey: string, authHeader: string, bra
       const normalizedRepoPath = path.normalize(repoPath);
       const propertiesPath = path.join(normalizedRepoPath, 'sonar-project.properties').replace(/\\/g, '/');
   
-      console.log(`📦 Running SonarScanner for branch: ${branchName}`);
-      console.log(`🛠 Using properties file at: ${propertiesPath}`);
+      console.log(`Running SonarScanner for branch: ${branchName}`);
+      console.log(`Using properties file at: ${propertiesPath}`);
   
       const { stdout, stderr } = await execAsync(
         `sonar-scanner -X -Dproject.settings=${propertiesPath}`,
@@ -899,7 +1115,7 @@ private createSonarPropertiesFile(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
+            Accept:GITHUB_ACCEPT_HEADER,
           },
         }
       );
@@ -910,10 +1126,18 @@ private createSonarPropertiesFile(
       let totalLines = 0;
       const languages: Record<string, number> = {};
   
+      
+      const languageEntities = await dataSource.getRepository(LanguageBytesPerLineEntity).find();
+      const languageMap: Record<string, number> = {};
+  
+      for (const entity of languageEntities) {
+        languageMap[entity.language] = entity.avgBytesPerLine;
+      }
+  
+      const defaultBytesPerLine = languageMap["Default"] || 50;
+  
       for (const [language, bytes] of Object.entries(languagesData)) {
-        const avgBytesPerLine =
-          LanguageBytesPerLine[language as keyof typeof LanguageBytesPerLine] ||
-          LanguageBytesPerLine.Default;
+        const avgBytesPerLine = languageMap[language] || defaultBytesPerLine;
         const lines = Math.floor(Number(bytes) / avgBytesPerLine);
         languages[language] = Math.round(lines);
         totalLines += lines;
@@ -921,6 +1145,7 @@ private createSonarPropertiesFile(
   
       return { totalLines: Math.round(totalLines), languages };
     } catch (error) {
+      console.error("Error calculating lines of code:", error);
       return { totalLines: 0, languages: {} };
     }
   }
@@ -1224,7 +1449,7 @@ private async storeBranchAnalysis(
                         codeMetrics.coverage = parseFloat(measure.value);
                         break;
                     case 'duplicated_lines_density':
-                        codeMetrics.duplicatedLines = parseFloat(measure.value);
+                        codeMetrics.duplicatedLines = Math.round(measure?.duplicatedLines || 0);
                         break;
                     case 'ncloc':
                         codeMetrics.linesOfCode = parseInt(measure.value);

@@ -13,9 +13,12 @@ import { PullRequestResolver } from "./modules/PullRequest/resolver/pullRequestR
 import { UserActivityResolver } from "./modules/UserActivity/resolver/UserActivityResolver"
 import { BranchResolver } from "./modules/branch/resolver/branchResolver";
 import { TriggerPullRequestResolver } from "./modules/TriggerAnalysis/resolver/triggerPullRequestsAnalysis";
+import { RequestGithubAuthResolver } from "./modules/RequestGithubAuthResponse/resolver/RequestGithubAuthResolver";
+import { FetchPrivateReposResolver } from "./modules/FetchPrivateRepos/resolver/FetchPrivateReposResolver";
+import { GitHubCommentResolver } from "./modules/GithubComments/resolver/GithubComment";
 export const schema = async () =>
   await buildSchema({
-    resolvers: [AuthResolver,UserResolver,SonarQubeResolver,GitHubResolver,UserActivityResolver, UserNameResolver,ProjectResolver,PullRequestResolver,BranchResolver,TriggerPullRequestResolver], 
+    resolvers: [AuthResolver,UserResolver,SonarQubeResolver,GitHubResolver,UserActivityResolver, UserNameResolver,ProjectResolver,PullRequestResolver,BranchResolver,TriggerPullRequestResolver,RequestGithubAuthResolver,FetchPrivateReposResolver,GitHubCommentResolver], 
     emitSchemaFile: true,
     validate: false, orphanedTypes: [AnalysisResult, LocReport],
     scalarsMap: [{ 

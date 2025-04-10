@@ -18,7 +18,7 @@ async getUserActivity(
   @Arg("githubUsername") githubUsername: string,
   @Ctx() ctx: MyContext
 ): Promise<UserActivity | null> {
-  console.log(`[INFO] Fetching user activity for GitHub user: ${githubUsername}`);
+  console.log(`Fetching user activity for GitHub user: ${githubUsername}`);
 
   try {
     const userRepository = dataSource.getRepository(User);
@@ -27,7 +27,7 @@ async getUserActivity(
     const user = await userRepository.findOne({ where: { username: githubUsername } });
 
     if (!user) {
-      console.log(`[WARN] User with GitHub username '${githubUsername}' not found.`);
+      console.log(`User with GitHub username '${githubUsername}' not found.`);
       return null;
     }
 
@@ -38,7 +38,7 @@ async getUserActivity(
       throw new Error("GitHub access token is missing for this user.");
     }
 
-    console.log(`[INFO] Found user:`, user);
+    console.log(`Found user:`, user);
 
     const githubApiUrl = `${this.GITHUB_API_URL}/user/repos`;
     console.log("Fetching GitHub repositories...");
@@ -82,8 +82,8 @@ async getUserActivity(
       if (!latestUpdatedRepo || new Date(repo.updated_at) > new Date(latestUpdatedRepo.updated_at)) {
         latestUpdatedRepo = repo;
       }
-      const { data: repos } = await axios.get("https://api.github.com/user/repos", {
-               headers: { Authorization: `Bearer ${userGithubToken}` },
+      const { data: repos } = await axios.get(`${process.env.GITHUB_API}/user/repos`, {
+               headers: { Authorization: `token ${userGithubToken}` },
                params: { visibility: "private", per_page: 100 },
              });
      
@@ -107,17 +107,26 @@ async getUserActivity(
         commitHistory.push(`${repo.name}: ${commits.length} commits`);
       }
 
-      const sonarIssuesResponse = await fetch(
-        `${this.SONARQUBE_URL}/api/issues/search?componentKeys=${repo.name}&resolved=false`,
-        {
-          headers: { Authorization: `Basic ${Buffer.from(this.SONARQUBE_TOKEN + ":").toString("base64")}` },
+      try {
+        const sonarIssuesResponse = await fetch(
+          `${this.SONARQUBE_URL}/api/issues/search?componentKeys=${repo.name}&resolved=false`,
+          {
+            headers: {
+              Authorization: `Basic ${Buffer.from(this.SONARQUBE_TOKEN + ":").toString("base64")}`,
+            },
+          }
+        );
+      
+        if (sonarIssuesResponse.ok) {
+          const sonarIssuesData = await sonarIssuesResponse.json();
+          overallSonarIssues += sonarIssuesData.total;
+        } else {
+          console.warn(`Failed to fetch SonarQube issues for ${repo.name}: ${sonarIssuesResponse.status}`);
         }
-      );
-
-      if (sonarIssuesResponse.ok) {
-        const sonarIssuesData = await sonarIssuesResponse.json();
-        overallSonarIssues += sonarIssuesData.total;
+      } catch (sonarError) {
+        console.warn(`Error fetching SonarQube data for ${repo.name}:`, sonarError);
       }
+      
     }
 
     const issuePercentage = totalRepositories > 0 ? (overallSonarIssues / totalRepositories) * 100 : 0;
@@ -181,7 +190,7 @@ async getUserActivity(
     await userActivityRepository.save(userActivity);
     return userActivity;
   } catch (error) {
-    console.error(`[ERROR] Failed to fetch user activity:`, error);
+    console.error(`Failed to fetch user activity:`, error);
     throw new Error("Failed to fetch user activity.");
   }
 }
