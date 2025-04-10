@@ -29,7 +29,7 @@ async function startServer() {
       allowedHeaders: "Content-Type, Authorization",
     })
   );
-
+  
   app.use(express.json());
   app.use(
     session({

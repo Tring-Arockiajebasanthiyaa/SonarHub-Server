@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
-import dataSource from '../database/data-source';
-import { Project } from '../modules/Project/entity/project.entity';
 import { SonarQubeResolver } from '../modules/SonarIssues/resolver/SonarQubeResolver';
 
 export class WebhookController {
-  private resolver = new SonarQubeResolver();
+  private readonly resolver = new SonarQubeResolver();
 
   async handleSonarQubeWebhook(req: Request, res: Response) {
     try {

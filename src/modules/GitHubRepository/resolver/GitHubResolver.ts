@@ -1,8 +1,12 @@
 import { Resolver, Query, Arg } from "type-graphql";
 import fetch from "node-fetch";
-import { Repo } from "../entity/repo.entity";
+import { Repo } from "../../GitHubRepository/entity/Repo.entity";
 import { User } from "../../user/entity/user.entity";
 import dataSource from "../../../database/data-source";
+import dotenv from "dotenv";
+dotenv.config();
+
+const GITHUB_API_URL = process.env.GITHUB_API;
 
 @Resolver()
 export class GitHubResolver {
@@ -11,7 +15,6 @@ export class GitHubResolver {
     const repoRepo = dataSource.getRepository(Repo);
     const userRepo = dataSource.getRepository(User);
   
-    // Fetch the full user object including their ID
     const user = await userRepo.findOne({
       where: { username },
       select: ["u_id", "username", "githubAccessToken"],
@@ -23,7 +26,7 @@ export class GitHubResolver {
   
     const GITHUB_TOKEN = user.githubAccessToken;
   
-    const response = await fetch(`https://api.github.com/users/${username}/repos`, {
+    const response = await fetch(`${GITHUB_API_URL}/users/${username}/repos`, {
       headers: {
         Authorization: `token ${GITHUB_TOKEN}`,
         Accept: "application/vnd.github.v3+json",
@@ -64,7 +67,7 @@ export class GitHubResolver {
         } else {
           const newRepo = repoRepo.create({
             name: repo.name,
-            owner: user,  // Assign the user object
+            owner: user,  
             language: repo.language || "-",
             stars: repo.stargazers_count || 0,
             totalCommits,
