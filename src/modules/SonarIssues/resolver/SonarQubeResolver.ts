@@ -18,18 +18,14 @@ import { promisify } from 'util';
 import { SonarIssue } from "../entity/SonarIssue.entity";
 import { LanguageBytesPerLineEntity } from "../../LanguageBytesPerLine/entity/languageBytesPerLine.entity";
 const execAsync = promisify(exec);
-import * as fs from "fs";
 
-
-import util from "util";
-
-const execPromise = util.promisify(exec);
 
 dotenv.config();
 
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
 const SONARQUBE_API_TOKEN = process.env.SONARQUBE_API_TOKEN;
 const GITHUB_API_URL = process.env.GITHUB_API;
+const GITHUB_ACCEPT_HEADER = "application/vnd.github.v3+json";
 @Resolver()
 export class SonarQubeResolver {
   private readonly projectRepo = dataSource.getRepository(Project);
@@ -70,7 +66,7 @@ async getProjectAnalysis(
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json",
+          Accept:  GITHUB_ACCEPT_HEADER,
         },
       }
     );
@@ -85,18 +81,9 @@ async getProjectAnalysis(
     
 
     try {
-      const branchResponse = await axios.get(
-        `${GITHUB_API_URL}/repos/${githubUsername}/${repoName.trim()}/branches`,
-        {
-          headers: {
-            Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
-          },
-        }
-      );
 
-      const branchRepo = dataSource.getRepository(Branch);
-      branches = await branchRepo.find({
+     const branchRepo = dataSource.getRepository(Branch);
+     branches = await branchRepo.find({
      where: {
     repoName: project.title,
     username: githubUsername,
@@ -165,7 +152,7 @@ async getProjectAnalysis(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
+            Accept:  GITHUB_ACCEPT_HEADER,
           },
         }
       );
@@ -239,7 +226,7 @@ async triggerBranchAnalysisIfPROpen(
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json"
+          Accept:  GITHUB_ACCEPT_HEADER
         }
       }
     );
@@ -253,7 +240,7 @@ async triggerBranchAnalysisIfPROpen(
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json"
+          Accept:  GITHUB_ACCEPT_HEADER
         }
       }
     );
@@ -282,7 +269,7 @@ async triggerBranchAnalysisIfPROpen(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json"
+            Accept:  GITHUB_ACCEPT_HEADER
           }
         }
       );
@@ -384,9 +371,9 @@ async analyzeSingleRepository(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json"
+            Accept:  GITHUB_ACCEPT_HEADER
           },
-          signal: AbortSignal.timeout(10000) // 10 second timeout
+          signal: AbortSignal.timeout(10000)
         }
       );
 
@@ -549,7 +536,7 @@ async triggerBranchAnalysis(
       {
         headers: {
           Authorization: `Bearer ${user.githubAccessToken}`,
-          Accept: "application/vnd.github.v3+json"
+          Accept:  GITHUB_ACCEPT_HEADER
         }
       }
     );
@@ -574,7 +561,7 @@ async triggerBranchAnalysis(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json"
+            Accept:  GITHUB_ACCEPT_HEADER
           }
         }
       );
@@ -812,7 +799,7 @@ async triggerBranchAnalysis(
             {
                 headers: {
                     Authorization: `Bearer ${user.githubAccessToken}`,
-                    Accept: "application/vnd.github.v3+json"
+                    Accept:  GITHUB_ACCEPT_HEADER
                 }
             }
         );
@@ -1128,7 +1115,7 @@ private createSonarPropertiesFile(
         {
           headers: {
             Authorization: `Bearer ${user.githubAccessToken}`,
-            Accept: "application/vnd.github.v3+json",
+            Accept:GITHUB_ACCEPT_HEADER,
           },
         }
       );
@@ -1462,7 +1449,7 @@ private async storeBranchAnalysis(
                         codeMetrics.coverage = parseFloat(measure.value);
                         break;
                     case 'duplicated_lines_density':
-                        codeMetrics.duplicatedLines = parseFloat(measure.value);
+                        codeMetrics.duplicatedLines = Math.round(measure?.duplicatedLines || 0);
                         break;
                     case 'ncloc':
                         codeMetrics.linesOfCode = parseInt(measure.value);

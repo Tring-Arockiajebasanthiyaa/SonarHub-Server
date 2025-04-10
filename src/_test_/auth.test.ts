@@ -85,6 +85,7 @@ describe("GitHub Authentication Routes", () => {
         req.user = user;
         next(); 
       };
+      return null;
     });
   };
 
