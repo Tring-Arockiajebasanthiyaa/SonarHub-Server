@@ -19,14 +19,13 @@ export class WebhookController {
       }
 
       const authHeader = `Basic ${Buffer.from(`${process.env.SONARQUBE_API_TOKEN}:`).toString("base64")}`;
-
+      res.status(200).send('OK');
       await this.resolver.handleWebhookEvent(
         projectId as string,
         payload.status,
         authHeader
       );
 
-      res.status(200).send('OK');
     } catch (error) {
       console.error('Webhook error:', error);
       res.status(500).send('Internal server error');

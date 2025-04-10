@@ -16,11 +16,11 @@ router.get(
     try {
       console.log("GitHub callback entered");
 
-      const sessionUser = req.user as User; // Ensure this is properly mocked in tests
+      const sessionUser = req.user as User; 
 
       if (!sessionUser || !sessionUser.u_id) {
         console.error("Session user or user ID missing");
-        return res.redirect(`${FRONTEND_URL}/login?message=Login%20failed`); // Added query params for the test case
+        return res.redirect(`${FRONTEND_URL}/login?message=Login%20failed`); 
       }
 
       const userRepository = dataSource.getRepository(User);
@@ -28,21 +28,21 @@ router.get(
 
       if (!user) {
         console.error("User not found in DB");
-        return res.redirect("http://localhost:5173/login?message=User%20not%20found");
+        return res.redirect(`${FRONTEND_URL}/login?message=User%20not%20found`);
       }
 
       const needsPassword = !user.password;
 
       if (needsPassword) {
         console.log("User needs to set a password");
-        return res.redirect("http://localhost:5173/set-password");
+        return res.redirect(`${FRONTEND_URL}/set-password`);
       } else {
         console.log("User login successful, redirecting to homepage");
-        return res.redirect("http://localhost:5173/");
+        return res.redirect(`${FRONTEND_URL}/`);
       }
     } catch (error) {
       console.error("GitHub callback error:", error);
-      return res.redirect("http://localhost:5173/login?message=Error%20occurred");
+      return res.redirect(`${FRONTEND_URL}/login?message=Error%20occurred`);
     }
   }
 );
