@@ -1,5 +1,4 @@
 import { Resolver, Query, Arg, Mutation } from "type-graphql";
-// import { SonarIssue } from "../entity/sonarIssue.entity";
 import { Project } from "../../Project/entity/project.entity";
 import { User } from "../../user/entity/user.entity";
 import { CodeMetrics } from "../../codeMetrics/entity/codeMetrics.entity";
