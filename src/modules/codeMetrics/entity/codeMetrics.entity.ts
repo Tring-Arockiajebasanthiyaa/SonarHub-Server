@@ -23,7 +23,9 @@ export class CodeMetrics {
   @Field({ nullable: true })
   username?: string;
 
-  @ManyToOne(() => Project, (project) => project.codeMetrics, { onDelete: "CASCADE" })
+  @ManyToOne(() => Project, (project) => project.codeMetrics, {
+    onDelete: "CASCADE",
+  })
   @Field(() => Project)
   project!: Project;
 
@@ -63,31 +65,31 @@ export class CodeMetrics {
   @Field({ nullable: true })
   technicalDebt?: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: "float", nullable: true })
   @Field({ nullable: true })
   reliabilityRating?: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: "float", nullable: true })
   @Field({ nullable: true })
   securityRating?: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
   bugs?: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
   vulnerabilities?: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: "int", nullable: true })
   @Field({ nullable: true })
   codeSmells?: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: "float", nullable: true })
   @Field({ nullable: true })
   debtRatio?: number;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: "varchar", nullable: true })
   @Field({ nullable: true })
   qualityGateStatus?: string;
 

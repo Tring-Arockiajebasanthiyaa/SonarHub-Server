@@ -4,8 +4,6 @@ import { UserActivity } from "../modules/UserActivity/entity/userActivity.entity
 import { User } from "../modules/user/entity/user.entity";
 import axios from "axios";
 
-
-
 jest.mock("axios");
 jest.mock("../database/data-source");
 
@@ -18,7 +16,6 @@ describe("UserActivityResolver", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
 
     userRepository = {
       findOne: jest.fn().mockResolvedValue({
@@ -33,52 +30,54 @@ describe("UserActivityResolver", () => {
       create: jest.fn().mockImplementation((data) => data),
     };
 
-    (dataSource.getRepository as jest.Mock).mockImplementation((entity: any) => {
-      if (entity === User) {
-        return userRepository;
-      }
-    
-      if (entity === UserActivity) {
-        return userActivityRepository;
-      }
-    
-      return null;
-    });
-    
+    (dataSource.getRepository as jest.Mock).mockImplementation(
+      (entity: any) => {
+        if (entity === User) {
+          return userRepository;
+        }
+
+        if (entity === UserActivity) {
+          return userActivityRepository;
+        }
+
+        return null;
+      },
+    );
   });
 
   it("should fetch user activity and update or create UserActivity", async () => {
-    
     (axios.get as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('https://api.github.com/users/testuser/repos')) {
+      if (url.includes("https://api.github.com/users/testuser/repos")) {
         return Promise.resolve({
-          data: [{
-            name: "repo1",
-            stargazers_count: 10,
-            forks_count: 5,
-            language: "JavaScript",
-            created_at: "2022-01-01T00:00:00Z",
-            updated_at: "2023-01-01T00:00:00Z",
-            private: false,
-            size: 1000,
-          }]
+          data: [
+            {
+              name: "repo1",
+              stargazers_count: 10,
+              forks_count: 5,
+              language: "JavaScript",
+              created_at: "2022-01-01T00:00:00Z",
+              updated_at: "2023-01-01T00:00:00Z",
+              private: false,
+              size: 1000,
+            },
+          ],
         });
       }
-    
-      if (url.includes('https://api.github.com/users/testuser/events')) {
+
+      if (url.includes("https://api.github.com/users/testuser/events")) {
         return Promise.resolve({
-          data: [{ type: "PushEvent" }]
+          data: [{ type: "PushEvent" }],
         });
       }
-    
-      if (url.includes('sonarqube')) {
+
+      if (url.includes("sonarqube")) {
         return Promise.resolve({
-          data: { total: 5 }
+          data: { total: 5 },
         });
       }
-    
+
       return Promise.reject(new Error(`Unmocked URL: ${url}`));
-    });    
+    });
   });
 
   // it("should handle GitHub API errors", async () => {

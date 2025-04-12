@@ -3,8 +3,8 @@ import { ObjectType, Field } from "type-graphql";
 @ObjectType()
 export class AnalysisResult {
   @Field(() => Boolean) 
-  success: boolean = false;
+  success = false;
 
   @Field(() => String) 
-  message: string = "";
+  message = "";
 }

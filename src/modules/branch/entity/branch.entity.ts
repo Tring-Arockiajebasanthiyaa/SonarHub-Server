@@ -1,7 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from "typeorm";
 import { ObjectType, Field } from "type-graphql";
 import { Repo } from "../../GitHubRepository/entity/Repo.entity";
-import { User } from "../../user/entity/user.entity"; 
+import { User } from "../../user/entity/user.entity";
 
 @ObjectType()
 @Entity("branches")
@@ -31,10 +37,10 @@ export class Branch {
   repoId!: number;
 
   @ManyToOne(() => Repo, { nullable: false })
-  @JoinColumn({ name: "repoId", referencedColumnName: "id" }) 
+  @JoinColumn({ name: "repoId", referencedColumnName: "id" })
   repo!: Repo;
 
   @ManyToOne(() => User, (user) => user.username, { nullable: false })
-  @JoinColumn({ name: "username", referencedColumnName: "username" }) 
+  @JoinColumn({ name: "username", referencedColumnName: "username" })
   user!: User;
 }

@@ -13,14 +13,14 @@ export class RequestGithubAuthResolver {
   @Mutation(() => RequestGithubAuthResponse)
   async requestGithubAuth(
     @Arg("username") username: string,
-    @Arg("code", { nullable: true }) code?: string
+    @Arg("code", { nullable: true }) code?: string,
   ): Promise<RequestGithubAuthResponse> {
     try {
       const clientId = process.env.GITHUB_CLIENT_ID;
       const clientSecret = process.env.GITHUB_CLIENT_SECRET;
       const githubUrl = process.env.GITHUB_URL;
       const callbackUrl = process.env.GITHUB_CALLBACK_URL;
-      const GITHUB_API_URL=process.env.GITHUB_API;
+      const GITHUB_API_URL = process.env.GITHUB_API;
       if (!clientId || !callbackUrl || !clientSecret) {
         console.error("Missing GitHub OAuth env vars.");
         throw new Error("Missing GitHub OAuth env vars.");
@@ -29,7 +29,7 @@ export class RequestGithubAuthResolver {
       if (!code) {
         const redirectUri = `${callbackUrl}?username=${username}`;
         const url = `${githubUrl}/login/oauth/authorize?client_id=${clientId}&scope=repo,user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
-        
+
         return {
           success: true,
           url,
@@ -46,7 +46,7 @@ export class RequestGithubAuthResolver {
         },
         {
           headers: { Accept: "application/json" },
-        }
+        },
       );
 
       const { access_token, error } = tokenResponse.data;

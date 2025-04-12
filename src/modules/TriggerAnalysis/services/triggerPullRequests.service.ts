@@ -1,7 +1,7 @@
 import { SonarQubeResolver } from "../../SonarIssues/resolver/SonarQubeResolver";
 import { postGitHubComment } from "./gitHub.service";
 import dataSource from "../../../database/data-source";
-import { User } from "../../user/entity/user.entity";      
+import { User } from "../../user/entity/user.entity";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,13 +10,17 @@ const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
 const SONARQUBE_TOKEN = process.env.SONARQUBE_API_TOKEN;
 const GITHUB_API_URL = process.env.GITHUB_API;
 
-export async function triggerPRAnalysis(username: string, repo: string, branch: string, prId: number) {
-  
+export async function triggerPRAnalysis(
+  username: string,
+  repo: string,
+  branch: string,
+  prId: number,
+) {
   const userRepository = dataSource.getRepository(User);
 
   const user = await userRepository.findOne({
     where: { username },
-    select: ["githubAccessToken"]
+    select: ["githubAccessToken"],
   });
 
   if (!user) {
@@ -31,16 +35,20 @@ export async function triggerPRAnalysis(username: string, repo: string, branch: 
     throw new Error("GitHub access token is missing for this user.");
   }
 
-  
-  const prResponse = await fetch(`${GITHUB_API_URL}/repos/${username}/${repo}/pulls/${prId}`, {
-    headers: {
-      Authorization: `Bearer ${userGithubToken}`,
-      Accept: "application/vnd.github.v3+json"
-    }
-  });
+  const prResponse = await fetch(
+    `${GITHUB_API_URL}/repos/${username}/${repo}/pulls/${prId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${userGithubToken}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    },
+  );
 
   if (!prResponse.ok) {
-    throw new Error(`Failed to fetch PR with ID ${prId}: ${prResponse.statusText}`);
+    throw new Error(
+      `Failed to fetch PR with ID ${prId}: ${prResponse.statusText}`,
+    );
   }
 
   const prData = await prResponse.json();
@@ -60,8 +68,11 @@ export async function triggerPRAnalysis(username: string, repo: string, branch: 
     return closedMessage;
   }
 
-  
-  const analysisResult = await sonarQubeResolver.triggerBranchAnalysis(username, repo, branch);
+  const analysisResult = await sonarQubeResolver.triggerBranchAnalysis(
+    username,
+    repo,
+    branch,
+  );
   const projectKey = `${username}_${repo}_${branch}`;
   const sourceBranch = "main";
   const sonarIssuesUrl = `${SONARQUBE_API_URL}/api/issues/search?projectKeys=${projectKey}&branch=${sourceBranch}&issueStatuses=OPEN,CONFIRMED`;
@@ -73,8 +84,8 @@ export async function triggerPRAnalysis(username: string, repo: string, branch: 
 
     const response = await fetch(sonarIssuesUrl, {
       headers: {
-        Authorization: authHeader
-      }
+        Authorization: authHeader,
+      },
     });
 
     if (!response.ok) {

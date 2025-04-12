@@ -9,7 +9,12 @@ const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !GITHUB_CALLBACK_URL || !JWT_SECRET) {
+if (
+  !GITHUB_CLIENT_ID ||
+  !GITHUB_CLIENT_SECRET ||
+  !GITHUB_CALLBACK_URL ||
+  !JWT_SECRET
+) {
   throw new Error("GitHub OAuth environment variables are missing.");
 }
 
@@ -27,7 +32,7 @@ passport.use(
       accessToken: string,
       refreshToken: string,
       profile: Profile,
-      done: (error: any, user?: any) => void
+      done: (error: any, user?: any) => void,
     ) => {
       try {
         console.log("GitHub Profile:", profile);
@@ -42,7 +47,8 @@ passport.use(
 
           user = dataSource.getRepository(User).create({
             name: profile.displayName || profile.username,
-            email: profile.emails?.[0]?.value || `${profile.username}@github.com`,
+            email:
+              profile.emails?.[0]?.value || `${profile.username}@github.com`,
             username,
             githubId: profile.id,
             githubAccessToken: accessToken,
@@ -54,15 +60,17 @@ passport.use(
           await dataSource.getRepository(User).save(user);
         }
 
-        const token = jwt.sign({ userId: user.u_id }, JWT_SECRET, { expiresIn: "1d" });
+        const token = jwt.sign({ userId: user.u_id }, JWT_SECRET, {
+          expiresIn: "1d",
+        });
 
         return done(null, { user, token });
       } catch (error) {
         console.error("GitHub Strategy Error:", error);
         return done(error, null);
       }
-    }
-  )
+    },
+  ),
 );
 
 passport.serializeUser((data: any, done) => {
@@ -75,7 +83,9 @@ passport.deserializeUser(async (userId: string, done) => {
       return done(null, null);
     }
 
-    const user = await dataSource.getRepository(User).findOne({ where: { u_id: userId } });
+    const user = await dataSource
+      .getRepository(User)
+      .findOne({ where: { u_id: userId } });
 
     if (!user) {
       console.error("User Not Found in DB");
@@ -90,10 +100,3 @@ passport.deserializeUser(async (userId: string, done) => {
 });
 
 export default passport;
-
-
-
-
-
-
-
