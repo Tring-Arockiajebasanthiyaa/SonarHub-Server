@@ -1,8 +1,10 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddAnalysisTimingFields1743451770258 implements MigrationInterface {
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+export class AddAnalysisTimingFields1743451770258
+  implements MigrationInterface
+{
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             DO $$ 
             BEGIN 
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
@@ -12,9 +14,11 @@ export class AddAnalysisTimingFields1743451770258 implements MigrationInterface 
                 END IF;
             END $$;
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "code_metrics" DROP COLUMN IF EXISTS "technicalDebt"`);
-    }
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "code_metrics" DROP COLUMN IF EXISTS "technicalDebt"`,
+    );
+  }
 }

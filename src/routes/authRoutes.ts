@@ -7,7 +7,10 @@ dotenv.config();
 const router = express.Router();
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
-router.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
+router.get(
+  "/auth/github",
+  passport.authenticate("github", { scope: ["user:email"] }),
+);
 
 router.get(
   "/auth/github/callback",
@@ -16,15 +19,18 @@ router.get(
     try {
       console.log("GitHub callback entered");
 
-      const sessionUser = req.user as User; 
+      const sessionUser = req.user as User;
 
       if (!sessionUser || !sessionUser.u_id) {
         console.error("Session user or user ID missing");
-        return res.redirect(`${FRONTEND_URL}/login?message=Login%20failed`); 
+        return res.redirect(`${FRONTEND_URL}/login?message=Login%20failed`);
       }
 
       const userRepository = dataSource.getRepository(User);
-      const user = await userRepository.findOne({ where: { u_id: sessionUser.u_id }, select: ["u_id", "password"] });
+      const user = await userRepository.findOne({
+        where: { u_id: sessionUser.u_id },
+        select: ["u_id", "password"],
+      });
 
       if (!user) {
         console.error("User not found in DB");
@@ -44,7 +50,7 @@ router.get(
       console.error("GitHub callback error:", error);
       return res.redirect(`${FRONTEND_URL}/login?message=Error%20occurred`);
     }
-  }
+  },
 );
 
 export default router;

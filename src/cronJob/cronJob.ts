@@ -1,7 +1,7 @@
 import cron from "node-cron";
-import { SonarQubeResolver } from "../modules/SonarIssues/resolver/SonarQubeResolver"; 
+import { SonarQubeResolver } from "../modules/SonarIssues/resolver/SonarQubeResolver";
 import dataSource from "../database/data-source";
-import { User } from "../modules/user/entity/user.entity"
+import { User } from "../modules/user/entity/user.entity";
 
 const sonarQubeResolver = new SonarQubeResolver();
 
@@ -20,7 +20,9 @@ async function runAnalysisForAllUsers() {
     for (const user of users) {
       console.log(`Triggering analysis for user: ${user.username}`);
       try {
-        const result = await sonarQubeResolver.triggerAutomaticAnalysis(user.username);
+        const result = await sonarQubeResolver.triggerAutomaticAnalysis(
+          user.username,
+        );
       } catch (error) {
         console.error(`Error analyzing ${user.username}:`, error);
       }

@@ -13,12 +13,15 @@ class UserResponse {
 @Resolver()
 export class UserResolver {
   @Query(() => UserResponse, { nullable: true })
-  async getUserByEmail(@Arg("email") email: string): Promise<UserResponse | null> {
+  async getUserByEmail(
+    @Arg("email") email: string,
+  ): Promise<UserResponse | null> {
     const userRepo = dataSource.getRepository(User);
     const user = await userRepo.findOne({ where: { email } });
 
-    if (!user) return null;
-
+    if (!user) {
+      return null;
+    }
     return {
       u_uid: user.u_id,
       githubUsername: user.username,

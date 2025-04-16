@@ -1,5 +1,5 @@
 import { ObjectType, Field } from "type-graphql";
-import { GraphQLJSONObject } from 'graphql-type-json';
+import { GraphQLJSONObject } from "graphql-type-json";
 
 @ObjectType()
 export class LocReport {

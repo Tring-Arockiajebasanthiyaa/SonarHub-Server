@@ -6,7 +6,7 @@
     "paths": {
       "*": ["src/*"]
     },
-    "types": ["express-session","jest"],
+    "types": ["express-session", "jest"],
     "typeRoots": ["./src/types", "./node_modules/@types"],
     "target": "es2016",
     "module": "commonjs",
@@ -21,7 +21,6 @@
   "exclude": ["node_modules", "dist"]
 }
 
-
 // {
 //   "compilerOptions": {
 //     "moduleResolution": "node",
@@ -32,7 +31,7 @@
 //     },
 //     "types": ["express-session"],
 //     "typeRoots": ["./node_modules/@types", "./src/types"],
-    
+
 //     /* Visit https://aka.ms/tsconfig to read more about this file */
 
 //     /* Projects */

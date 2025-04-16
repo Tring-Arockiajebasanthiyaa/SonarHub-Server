@@ -19,7 +19,7 @@ export class PullRequestResolver {
     @Arg("branchName") branchName: string,
     @Arg("repoName") repoName: string,
     @Arg("githubUsername") githubUsername: string,
-    @Ctx() ctx: MyContext
+    @Ctx() ctx: MyContext,
   ): Promise<PullRequest[]> {
     const prRepo = dataSource.getRepository(PullRequest);
     const userRepo = dataSource.getRepository(User);
@@ -30,8 +30,8 @@ export class PullRequestResolver {
     });
 
     const repo = await repoRepo.findOneOrFail({
-      where: { name: repoName, owner: { username: githubUsername }
-    }, relations: ["owner"],
+      where: { name: repoName, owner: { username: githubUsername } },
+      relations: ["owner"],
     });
 
     const response = await axios.get(
@@ -41,11 +41,13 @@ export class PullRequestResolver {
           Authorization: `Bearer ${user.githubAccessToken}`,
           Accept: "application/vnd.github.v3+json",
         },
-      }
+      },
     );
 
     for (const pr of response.data) {
-      if (pr.head.ref !== branchName) continue;
+      if (pr.head.ref !== branchName){
+         continue;
+      }
 
       const existingPR = await prRepo.findOne({
         where: {
@@ -63,7 +65,7 @@ export class PullRequestResolver {
             Authorization: `Bearer ${user.githubAccessToken}`,
             Accept: "application/vnd.github.v3+json",
           },
-        }
+        },
       );
 
       const prData: DeepPartial<PullRequest> = {
@@ -79,7 +81,7 @@ export class PullRequestResolver {
         additions: diffStatRes.data.additions,
         deletions: diffStatRes.data.deletions,
         changedFiles: diffStatRes.data.changed_files,
-        repo, 
+        repo,
         user,
       };
 
@@ -91,7 +93,7 @@ export class PullRequestResolver {
       }
     }
 
-    return await prRepo.find({
+    return prRepo.find({
       where: { branch: branchName, githubUsername, repo: { id: repo.id } },
       relations: ["repo"],
     });

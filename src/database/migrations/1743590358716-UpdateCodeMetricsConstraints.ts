@@ -1,11 +1,12 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class UpdateCodeMetricsConstraints1743590358716 implements MigrationInterface {
-    name = 'UpdateCodeMetricsConstraints1743590358716'
+export class UpdateCodeMetricsConstraints1743590358716
+  implements MigrationInterface
+{
+  name = "UpdateCodeMetricsConstraints1743590358716";
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-    
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             ALTER TABLE "code_metrics" 
             ALTER COLUMN "linesOfCode" SET NOT NULL,
             ALTER COLUMN "linesOfCode" SET DEFAULT 0,
@@ -30,11 +31,10 @@ export class UpdateCodeMetricsConstraints1743590358716 implements MigrationInter
             ALTER COLUMN "qualityGateStatus" SET NOT NULL,
             ALTER COLUMN "qualityGateStatus" SET DEFAULT 'UNKNOWN'
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-       
-        await queryRunner.query(`
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             ALTER TABLE "code_metrics" 
             ALTER COLUMN "linesOfCode" DROP NOT NULL,
             ALTER COLUMN "linesOfCode" DROP DEFAULT,
@@ -59,5 +59,5 @@ export class UpdateCodeMetricsConstraints1743590358716 implements MigrationInter
             ALTER COLUMN "qualityGateStatus" DROP NOT NULL,
             ALTER COLUMN "qualityGateStatus" DROP DEFAULT
         `);
-    }
+  }
 }

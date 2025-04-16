@@ -53,6 +53,11 @@ A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `dat
 """
 scalar DateTimeISO
 
+type ForgotPasswordResponse {
+  message: String!
+  token: String!
+}
+
 type GitHubComment {
   body: String!
   branchName: String!
@@ -87,12 +92,11 @@ type LocReport {
 type Mutation {
   analyzeSingleRepository(githubUsername: String!, repoName: String!): AnalysisResult!
   createProject(description: String!, overview: String!, result: String!, title: String!): Project!
-  forgotPassword(email: String!): String!
+  forgotPassword(email: String!): ForgotPasswordResponse!
   githubAuth: AuthResponse
   handleWebhookEvent(authHeader: String!, projectId: String!, status: String!): Boolean!
   requestGithubAuth(code: String, username: String!): RequestGithubAuthResponse!
   resetPassword(newPassword: String!, token: String!): String!
-  sendPasswordChangeEmail(email: String!): String!
   setPassword(email: String!, password: String!): String!
   signIn(email: String!, password: String!): String!
   triggerAnalysis(branchName: String!, prId: Int!, repoName: String!, username: String!): TriggerAnalysisResponse!

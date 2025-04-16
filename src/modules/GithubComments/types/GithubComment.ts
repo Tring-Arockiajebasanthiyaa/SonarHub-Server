@@ -1,5 +1,5 @@
 import { ObjectType, Field, Int } from "type-graphql";
-
+import 'reflect-metadata'
 @ObjectType()
 export class GitHubComment {
   @Field()

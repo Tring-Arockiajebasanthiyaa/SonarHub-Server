@@ -10,11 +10,9 @@ export class AuthResponse {
   @Field(() => User, { nullable: true })
   user?: User | null;
 
-  @Field(() => String, { nullable: true }) 
+  @Field(() => String, { nullable: true })
   token?: string | null;
 
-  @Field() 
+  @Field()
   needsPassword?: boolean;
 }
-
-

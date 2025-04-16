@@ -66,13 +66,17 @@ describe("GitHubResolver.getUserRepositories", () => {
 
     
     mockRepoFindOne.mockResolvedValue(null); 
-    mockRepoCreate.mockReturnValue({
+    const createdRepo = {
       name: "test-repo",
       language: "JavaScript",
       stars: 5,
       totalCommits: 3,
-    });
-
+    };
+    
+    mockRepoCreate.mockReturnValue(createdRepo);
+    mockRepoSave.mockResolvedValue(createdRepo); 
+    
+        
     const result = await resolver.getUserRepositories("testuser");
 
     expect(mockFindOne).toHaveBeenCalledWith({

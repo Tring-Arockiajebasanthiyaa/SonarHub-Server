@@ -24,7 +24,7 @@ export class Project {
   @Column()
   @Field()
   title!: string;
-  
+
   @Column({ unique: true })
   @Field()
   repoName!: string;
@@ -40,7 +40,7 @@ export class Project {
   @Column({ nullable: true })
   @Field({ nullable: true })
   result?: string;
-  
+
   @Column({ nullable: true })
   @Field()
   githubUrl!: string;
@@ -61,7 +61,7 @@ export class Project {
   @Field()
   username!: string;
 
-  @Column({ type: "timestamp", nullable: true  })
+  @Column({ type: "timestamp", nullable: true })
   @Field({ nullable: true })
   analysisStartTime!: Date;
 
@@ -86,11 +86,16 @@ export class Project {
   @Field(() => User)
   user!: User;
 
-  @OneToMany(() => SonarIssue, (sonarIssue) => sonarIssue.project, { cascade: true })
+  @OneToMany(() => SonarIssue, (sonarIssue) => sonarIssue.project, {
+    cascade: true,
+  })
   @Field(() => [SonarIssue], { nullable: true })
   sonarIssues?: SonarIssue[];
 
-  @OneToMany(() => CodeMetrics, (metrics) => metrics.project, { cascade: true, nullable: false })
+  @OneToMany(() => CodeMetrics, (metrics) => metrics.project, {
+    cascade: true,
+    nullable: false,
+  })
   @Field(() => [CodeMetrics], { nullable: false })
   codeMetrics!: CodeMetrics[];
 

@@ -84,7 +84,7 @@ export class UserActivity {
 
   @Field()
   @Column({ type: "int", default: 0 })
-  totalContributions!: number; 
+  totalContributions!: number;
 
   @Field()
   @Column({ type: "timestamp", nullable: true })

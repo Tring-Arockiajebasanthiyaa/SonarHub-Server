@@ -9,14 +9,13 @@ import { schema } from "./schema";
 import session from "express-session";
 import { MyContext } from "./types/MyContext";
 import authRoutes from "./routes/authRoutes";
-import dataSource from "./database/data-source"; 
+import dataSource from "./database/data-source";
 import "./cronJob/cronJob";
-import { WebhookController } from './controllers/webhook.controller';
+import { WebhookController } from "./controllers/webhook.controller";
 
 dotenv.config();
 
 async function startServer() {
-  
   await dataSource.initialize();
   console.log("Data Source has been initialized!");
 
@@ -28,23 +27,29 @@ async function startServer() {
       credentials: true,
       methods: "GET,POST,OPTIONS",
       allowedHeaders: "Content-Type, Authorization",
-    })
+    }),
   );
-  
+
   app.use(express.json());
   app.use(
     session({
       secret: process.env.SESSION_SECRET!,
       resave: false,
       saveUninitialized: true,
-      cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true,sameSite: "lax" }
-    })
+      cookie: {
+        secure: process.env.NODE_ENV === "production",
+        httpOnly: true,
+        sameSite: "lax",
+      },
+    }),
   );
   app.use(passport.initialize());
   app.use(passport.session());
   app.use(authRoutes);
   const webhookController = new WebhookController();
-  app.post('/webhook', (req, res) => webhookController.handleSonarQubeWebhook(req, res));
+  app.post("/webhook", (req, res) =>
+    webhookController.handleSonarQubeWebhook(req, res),
+  );
   // Initialize Apollo Server with Schema and Context
   const apolloServer = new ApolloServer<MyContext>({
     schema: await schema(),
@@ -64,10 +69,12 @@ async function startServer() {
             : undefined,
         };
       },
-    })
+    }),
   );
 
-  app.listen(4000, () => console.log(" Server running on http://localhost:4000/graphql"));
+  app.listen(4000, () =>
+    console.log(" Server running on http://localhost:4000/graphql"),
+  );
 }
 
 startServer().catch((err) => console.error("Server startup error:", err));

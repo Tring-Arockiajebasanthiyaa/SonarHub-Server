@@ -1,4 +1,3 @@
-
 import { Arg, Query, Resolver, Int } from "type-graphql";
 import { GitHubComment } from "../types/GithubComment";
 import axios from "axios";
@@ -15,12 +14,12 @@ export class GitHubCommentResolver {
   async getPRComments(
     @Arg("username") username: string,
     @Arg("repoName") repoName: string,
-    @Arg("prId", () => Int) prId: number
+    @Arg("prId", () => Int) prId: number,
   ): Promise<GitHubComment[]> {
     const userRepository = dataSource.getRepository(User);
     const user = await userRepository.findOne({
       where: { username },
-      select: ["githubAccessToken"]
+      select: ["githubAccessToken"],
     });
 
     if (!user || !user.githubAccessToken) {
@@ -34,7 +33,7 @@ export class GitHubCommentResolver {
           Authorization: `token ${user.githubAccessToken}`,
           Accept: "application/vnd.github+json",
         },
-      }
+      },
     );
 
     return response.data.map((comment: any) => ({
