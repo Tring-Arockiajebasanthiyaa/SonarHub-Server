@@ -17,8 +17,7 @@ import { promisify } from "util";
 import { SonarIssue } from "../entity/SonarIssue.entity";
 import { LanguageBytesPerLineEntity } from "../../LanguageBytesPerLine/entity/languageBytesPerLine.entity";
 const execAsync = promisify(exec);
-const path = require("path");
-
+import path from "path";
 dotenv.config();
 
 const SONARQUBE_API_URL = process.env.SONARQUBE_API_URL;
@@ -312,7 +311,13 @@ export class SonarQubeResolver {
         }
 
         const repo = await repoResponse.json();
-        const locData = await this.getRepositoryLinesOfCode(user, repo);
+        let locData = { totalLines: 0, languages: {} };
+        try {
+          locData = await this.getRepositoryLinesOfCode(user, repo);
+        } catch (error) {
+          console.error("Failed to get lines of code, continuing without it:", error);
+        }
+        
 
         project = this.projectRepo.create({
           title: repo.name,
@@ -634,7 +639,12 @@ export class SonarQubeResolver {
         }
 
         const repo = await repoResponse.json();
-        const locData = await this.getRepositoryLinesOfCode(user, repo);
+        let locData = { totalLines: 0, languages: {} };
+        try {
+          locData = await this.getRepositoryLinesOfCode(user, repo);
+        } catch (error) {
+          console.error("Failed to get lines of code, continuing without it:", error);
+        }
 
         project = this.projectRepo.create({
           title: repo.name,
@@ -689,7 +699,7 @@ export class SonarQubeResolver {
         });
 
         await this.branchRepo.save(branchEntity);
-
+        
         return {
           success: true,
           message: `Successfully analyzed branch ${branchName} of repository ${repoName}`,
@@ -1155,7 +1165,7 @@ export class SonarQubeResolver {
       `sonar.projectKey=${projectKey}`,
       `sonar.projectName=${projectName}`,
       `sonar.host.url=${SONARQUBE_API_URL}`,
-      `sonar.login=${SONARQUBE_API_TOKEN}`, // 🔥 Correct param
+      `sonar.login=${SONARQUBE_API_TOKEN}`,
       `sonar.sources=.`,
       `sonar.sourceEncoding=UTF-8`,
       `sonar.verbose=true`,
@@ -1176,7 +1186,9 @@ export class SonarQubeResolver {
       { headers: { Authorization: authHeader } },
     );
 
-    if (!projectResponse.ok) throw new Error(await projectResponse.text());
+    if (!projectResponse.ok){
+      throw new Error(await projectResponse.text());
+    }
 
     const projectData = await projectResponse.json();
 
@@ -1587,7 +1599,7 @@ export class SonarQubeResolver {
     const issueRepo = dataSource.getRepository(SonarIssue);
     const metricsRepo = dataSource.getRepository(CodeMetrics);
     await dataSource.transaction(async (transactionalEntityManager) => {
-      let codeMetrics = metricsRepo.create({
+      const codeMetrics = metricsRepo.create({
         project,
         branch: branchName,
         createdAt: new Date(),
@@ -1627,7 +1639,9 @@ export class SonarQubeResolver {
                   .reduce(
                     (acc: Record<string, number>, pair: string) => {
                       const [lang, count] = pair.split("=");
-                      if (lang && count) acc[lang] = parseInt(count);
+                      if (lang && count){
+                        acc[lang] = parseInt(count);
+                      }
                       return acc;
                     },
                     {} as Record<string, number>,
@@ -1795,7 +1809,9 @@ export class SonarQubeResolver {
     distribution: string,
   ): Record<string, number> {
     const result: Record<string, number> = {};
-    if (!distribution) return result;
+    if (!distribution){
+      return result;
+    } 
 
     const items = distribution.split(";");
 

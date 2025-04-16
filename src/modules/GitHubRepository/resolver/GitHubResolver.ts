@@ -81,7 +81,6 @@ export class GitHubResolver {
           });
 
           return repoRepo.save(newRepo);
-
         }
       }),
     );
