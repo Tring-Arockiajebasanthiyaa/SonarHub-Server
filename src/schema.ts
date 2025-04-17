@@ -6,7 +6,7 @@ import { UserResolver } from "./modules/user/userId/resolver/userResolver";
 import { SonarQubeResolver } from "./modules/SonarIssues/resolver/SonarQubeResolver";
 import { GitHubResolver } from "./modules/GitHubRepository/resolver/GitHubResolver";
 import { UserActivityResolver } from "./modules/UserActivity/resolver/UserActivityResolver";
-import { UserNameResolver } from "./modules/userName/resolver/userNameResolver";
+import { UserNameResolver } from "./modules/userName_Temp/resolver/userNameResolver";
 import { ProjectResolver } from "./modules/Project/resolver/ProjectResolver";
 import { PullRequestResolver } from "./modules/PullRequest/resolver/pullRequestResolver";
 import { BranchResolver } from "./modules/branch/resolver/branchResolver";
