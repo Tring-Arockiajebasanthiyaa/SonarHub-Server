@@ -16,7 +16,7 @@ import { FetchPrivateReposResolver } from "./modules/FetchPrivateRepos/resolver/
 import { GitHubCommentResolver } from "./modules/GithubComments/resolver/GithubComment";
 import { AnalysisResult } from "./modules/SonarIssues/graphql/types/AnalysisResult";
 import { LocReport } from "./modules/SonarIssues/graphql/types/LocReport";
-
+console.log('Trying to import userNameResolver');
 export const schema = async () =>
   buildSchema({
     resolvers: [
