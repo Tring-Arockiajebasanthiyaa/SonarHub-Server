@@ -17,6 +17,7 @@ import { GitHubCommentResolver } from "./modules/GithubComments/resolver/GithubC
 import { AnalysisResult } from "./modules/SonarIssues/graphql/types/AnalysisResult";
 import { LocReport } from "./modules/SonarIssues/graphql/types/LocReport";
 
+
 export const schema = async () =>
   buildSchema({
     resolvers: [
@@ -43,4 +44,5 @@ export const schema = async () =>
         scalar: GraphQLJSONObject as unknown as GraphQLScalarType,
       },
     ],
+    
   });
